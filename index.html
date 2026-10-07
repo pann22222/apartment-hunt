@@ -91,6 +91,13 @@
   .rating.top { background: var(--top-pick); }
   .rating.very { background: var(--very); color: #3a2e00; }
   .rating.somewhat { background: var(--somewhat); }
+  select.rating {
+    appearance: none;
+    -webkit-appearance: none;
+    border: none;
+    outline: none;
+    cursor: pointer;
+  }
   .rent {
     font-size: 1.15rem;
     font-weight: 700;
@@ -133,6 +140,48 @@
     border-radius: 8px;
     margin-bottom: 14px;
   }
+  .contact-row {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 14px;
+    font-size: 0.85rem;
+  }
+  .contact-name {
+    color: var(--muted);
+  }
+  .contact-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    text-decoration: none;
+    font-size: 0.82rem;
+    font-weight: 600;
+    padding: 7px 12px;
+    border-radius: 8px;
+  }
+  .contact-btn.call { background: #eef5ff; color: #1b5fb0; }
+  .contact-btn.line { background: #e4faec; color: #06894a; }
+  .decision-row {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 10px;
+  }
+  .decision-btn {
+    flex: 1;
+    border: 1px solid var(--border);
+    background: #fdfdfc;
+    padding: 8px 6px;
+    border-radius: 8px;
+    font-size: 0.82rem;
+    font-weight: 600;
+    cursor: pointer;
+    color: var(--text);
+  }
+  .decision-btn.selected.take { background: #ddf3e4; border-color: #2b8a3e; color: #1d6b2d; }
+  .decision-btn.selected.leave { background: #fbe0e0; border-color: #c92a2a; color: #a61e1e; }
+  .decision-btn.selected.unsure { background: #fff3cd; border-color: #d4a017; color: #8a6400; }
   .notes-static {
     font-size: 0.85rem;
     color: var(--muted);
@@ -166,24 +215,65 @@
     min-height: 54px;
     resize: vertical;
   }
-  .actions {
-    display: flex;
-    gap: 8px;
-    margin-top: 8px;
-    flex-wrap: wrap;
-  }
-  .actions button {
-    flex: 1;
-    min-width: 120px;
+  .remove-btn {
+    display: block;
+    margin-top: 10px;
     border: none;
-    border-radius: 8px;
-    padding: 10px 12px;
-    font-size: 0.85rem;
+    background: none;
+    color: #c92a2a;
+    font-size: 0.78rem;
+    cursor: pointer;
+    padding: 0;
+  }
+  .add-section {
+    max-width: 640px;
+    margin: 0 auto;
+    padding: 0 16px 16px;
+  }
+  .add-toggle {
+    display: block;
+    width: 100%;
+    border: 1px dashed var(--border);
+    background: var(--card);
+    padding: 10px;
+    border-radius: 10px;
+    font-size: 0.9rem;
     font-weight: 600;
     cursor: pointer;
+    color: var(--text);
   }
-  .btn-line { background: #06C755; color: #fff; }
-  .btn-copy { background: #efefef; color: #2f2f2f; }
+  .add-panel {
+    display: none;
+    flex-direction: column;
+    gap: 10px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 16px 18px;
+    margin-top: 12px;
+  }
+  .add-panel.open { display: flex; }
+  .add-panel input,
+  .add-panel select,
+  .add-panel textarea {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px 10px;
+    font-size: 0.9rem;
+    font-family: inherit;
+    width: 100%;
+    background: #fdfdfc;
+  }
+  .add-panel textarea { min-height: 50px; resize: vertical; }
+  .add-submit {
+    border: none;
+    background: #111;
+    color: #fff;
+    font-weight: 600;
+    padding: 10px;
+    border-radius: 8px;
+    cursor: pointer;
+  }
   .saved-badge {
     font-size: 0.72rem;
     color: #2b8a3e;
@@ -213,23 +303,77 @@
   <button data-filter="Somewhat interested">Somewhat interested</button>
 </div>
 
+<div class="add-section">
+  <button class="add-toggle" id="add-toggle">+ Add a new place</button>
+  <form class="add-panel" id="add-form">
+    <div class="form-row">
+      <label for="new-link">Listing link (591 or any site)</label>
+      <input type="url" id="new-link" placeholder="https://rent.591.com.tw/123456">
+    </div>
+    <div class="form-row">
+      <label for="new-neighborhood">Neighborhood</label>
+      <input type="text" id="new-neighborhood" placeholder="e.g. Xindian">
+    </div>
+    <div class="form-row">
+      <label for="new-rent">Rent (NT$)</label>
+      <input type="number" id="new-rent" placeholder="e.g. 12000">
+    </div>
+    <div class="form-row">
+      <label for="new-sqft">Size (坪)</label>
+      <input type="number" id="new-sqft" placeholder="e.g. 8">
+    </div>
+    <div class="form-row">
+      <label for="new-level">Floor</label>
+      <input type="text" id="new-level" placeholder="e.g. 3F">
+    </div>
+    <div class="form-row">
+      <label for="new-owner">Owner or agent?</label>
+      <select id="new-owner">
+        <option value="Owner">Owner</option>
+        <option value="Agent">Agent</option>
+      </select>
+    </div>
+    <div class="form-row">
+      <label for="new-contact-name">Contact name</label>
+      <input type="text" id="new-contact-name" placeholder="e.g. 王先生">
+    </div>
+    <div class="form-row">
+      <label for="new-phone">Contact phone</label>
+      <input type="tel" id="new-phone" placeholder="e.g. 0972-528-577">
+    </div>
+    <div class="form-row">
+      <label for="new-rating">Rating</label>
+      <select id="new-rating">
+        <option value="Top pick">Top pick</option>
+        <option value="Very interested">Very interested</option>
+        <option value="Somewhat interested" selected>Somewhat interested</option>
+      </select>
+    </div>
+    <div class="form-row">
+      <label for="new-notes">Notes</label>
+      <textarea id="new-notes" placeholder="anything worth remembering"></textarea>
+    </div>
+    <button type="submit" class="add-submit">Add this place</button>
+  </form>
+</div>
+
 <div class="list" id="list"></div>
 
 <footer>Made with 💛 for apartment hunting in Xindian</footer>
 
 <script>
 const listings = [
-  { id: "22109937", rating: "Top pick", neighborhood: "Xindian", rent: 12000, sqft: 5, level: "3F/4F", owner: "Owner", fee: "No-Fee", elevator: false, features: ["washing machine","Water Machine","rent-stabilized"], notes: "" },
-  { id: "22100813", rating: "Very interested", neighborhood: "Xindian", rent: 12500, sqft: 10, level: "2F/3F", owner: "Owner", fee: "Water Free", elevator: false, features: ["washing machine (share)"], notes: "" },
-  { id: "22097513", rating: "Very interested", neighborhood: "Xindian", rent: 13500, sqft: 8, level: "", owner: "Agent", fee: "", elevator: false, features: ["washing machine","Water Machine"], notes: "" },
-  { id: "22135508", rating: "Very interested", neighborhood: "Xindian", rent: 10000, sqft: 5, level: "1F", owner: "Owner", fee: "", elevator: false, features: ["washing machine"], notes: "" },
-  { id: "22100737", rating: "Very interested", neighborhood: "Xindian", rent: 11000, sqft: 8, level: "2F", owner: "Owner", fee: "", elevator: false, features: ["washing machine"], notes: "" },
-  { id: "22056915", rating: "Somewhat interested", neighborhood: "Xindian", rent: 8500, sqft: 9, level: "1F", owner: "Owner", fee: "No-Fee", elevator: false, features: [], notes: "" },
-  { id: "22038129", rating: "Somewhat interested", neighborhood: "Xindian", rent: 8000, sqft: 8, level: "頂層加蓋/1F", owner: "Owner", fee: "No-Fee", elevator: false, features: ["washing machine","rent-stabilized"], notes: "" },
-  { id: "22101540", rating: "Somewhat interested", neighborhood: "Xindian", rent: 11300, sqft: 6, level: "4F", owner: "Agent", fee: "?", elevator: false, features: ["washing machine"], notes: "" },
-  { id: "22064039", rating: "Somewhat interested", neighborhood: "Xindian", rent: 16800, sqft: null, level: "3F", owner: "Owner", fee: "", elevator: false, features: [], notes: "Shared Bathroom" },
-  { id: "22103904", rating: "Somewhat interested", neighborhood: "Xindian", rent: 8500, sqft: 7, level: "5F", owner: "Owner", fee: "?", elevator: false, features: [], notes: "" },
-  { id: "22138815", rating: "Somewhat interested", neighborhood: "Xindian", rent: 15000, sqft: 10, level: "6F", owner: "Agent", fee: "Fee", elevator: true, features: [], notes: "Need to pay Agent fee / service fee: half a month's rent" },
+  { id: "22109937", rating: "Top pick", neighborhood: "Xindian", rent: 12000, sqft: 5, level: "3F/4F", owner: "Owner", fee: "No-Fee", elevator: false, features: ["washing machine","Water Machine","rent-stabilized"], notes: "", contactName: "曾小姐", phoneDisplay: "0972-528-577 ext 4726653", tel: "0972528577,4726653" },
+  { id: "22100813", rating: "Very interested", neighborhood: "Xindian", rent: 12500, sqft: 10, level: "2F/3F", owner: "Owner", fee: "Water Free", elevator: false, features: ["washing machine (share)"], notes: "", contactName: "龔女士", phoneDisplay: "0935-920-910", tel: "0935920910" },
+  { id: "22097513", rating: "Very interested", neighborhood: "Xindian", rent: 13500, sqft: 8, level: "", owner: "Agent", fee: "", elevator: false, features: ["washing machine","Water Machine"], notes: "", contactName: "崔小姐", phoneDisplay: "0918-666-444", tel: "0918666444", lineId: "0918666444", lineType: "personal" },
+  { id: "22135508", rating: "Very interested", neighborhood: "Xindian", rent: 10000, sqft: 5, level: "1F", owner: "Owner", fee: "", elevator: false, features: ["washing machine"], notes: "", contactName: "黃先生", phoneDisplay: "0972-528-577 ext 4725739", tel: "0972528577,4725739" },
+  { id: "22100737", rating: "Very interested", neighborhood: "Xindian", rent: 11000, sqft: 8, level: "2F", owner: "Owner", fee: "", elevator: false, features: ["washing machine"], notes: "", contactName: "0先生", phoneDisplay: "0972-528-577 ext 4725751", tel: "0972528577,4725751" },
+  { id: "22056915", rating: "Somewhat interested", neighborhood: "Xindian", rent: 8500, sqft: 9, level: "1F", owner: "Owner", fee: "No-Fee", elevator: false, features: [], notes: "", contactName: "呂先生", phoneDisplay: "0988-215-941", tel: "0988215941" },
+  { id: "22038129", rating: "Somewhat interested", neighborhood: "Xindian", rent: 8000, sqft: 8, level: "頂層加蓋/1F", owner: "Owner", fee: "No-Fee", elevator: false, features: ["washing machine","rent-stabilized"], notes: "", contactName: "蔡先生", phoneDisplay: "0972-528-577 ext 4718484", tel: "0972528577,4718484" },
+  { id: "22101540", rating: "Somewhat interested", neighborhood: "Xindian", rent: 11300, sqft: 6, level: "4F", owner: "Agent", fee: "?", elevator: false, features: ["washing machine"], notes: "", contactName: "張先生", phoneDisplay: "0939-100-187", tel: "0939100187", lineId: "quv4409a", lineType: "official" },
+  { id: "22064039", rating: "Somewhat interested", neighborhood: "Xindian", rent: 16800, sqft: null, level: "3F", owner: "Owner", fee: "", elevator: false, features: [], notes: "Shared Bathroom", contactName: "張先生", phoneDisplay: "0920-022-682", tel: "0920022682" },
+  { id: "22103904", rating: "Somewhat interested", neighborhood: "Xindian", rent: 8500, sqft: 7, level: "5F", owner: "Owner", fee: "?", elevator: false, features: [], notes: "", contactName: "李小姐", phoneDisplay: "0972-281-522", tel: "0972281522" },
+  { id: "22138815", rating: "Somewhat interested", neighborhood: "Xindian", rent: 15000, sqft: 10, level: "6F", owner: "Agent", fee: "Fee", elevator: true, features: [], notes: "Need to pay Agent fee / service fee: half a month's rent", contactName: "游先生 (Eason)", phoneDisplay: "0970-104-204", tel: "0970104204", lineId: "d10220112", lineType: "personal" },
 ];
 
 const ratingClass = { "Top pick": "top", "Very interested": "very", "Somewhat interested": "somewhat" };
@@ -237,11 +381,12 @@ const feeClass = { "No-Fee": "fee-none", "Low-Fee": "fee-low", "Fee": "fee-yes",
 
 const storeKey = id => `apt-hunt-${id}`;
 
-function loadState(id) {
+function loadState(id, defaultRating, defaultPreNote) {
   try {
-    return JSON.parse(localStorage.getItem(storeKey(id))) || { date: "", note: "" };
+    const stored = JSON.parse(localStorage.getItem(storeKey(id)));
+    return stored || { date: "", note: "", decision: "", rating: defaultRating, preNote: defaultPreNote || "" };
   } catch (e) {
-    return { date: "", note: "" };
+    return { date: "", note: "", decision: "", rating: defaultRating, preNote: defaultPreNote || "" };
   }
 }
 
@@ -249,43 +394,69 @@ function saveState(id, state) {
   localStorage.setItem(storeKey(id), JSON.stringify(state));
 }
 
-function buildMessage(l, state) {
-  let msg = `🏠 591 #${l.id} (${l.neighborhood}, NT$${l.rent})\n`;
-  if (state.date) msg += `📅 Appointment: ${state.date}\n`;
-  if (state.note) msg += `📝 Note: ${state.note}\n`;
-  msg += `🔗 https://rent.591.com.tw/${l.id}`;
-  return msg;
+const CUSTOM_KEY = "apt-hunt-custom-list";
+
+function loadCustomListings() {
+  try {
+    const stored = JSON.parse(localStorage.getItem(CUSTOM_KEY));
+    return Array.isArray(stored) ? stored : [];
+  } catch (e) {
+    return [];
+  }
 }
 
+function saveCustomListings(arr) {
+  localStorage.setItem(CUSTOM_KEY, JSON.stringify(arr));
+}
+
+const ratingOptions = ["Top pick", "Very interested", "Somewhat interested"];
+let currentFilter = "All";
+
 function render(filter) {
+  currentFilter = filter;
   const listEl = document.getElementById("list");
   listEl.innerHTML = "";
-  listings
-    .filter(l => filter === "All" || l.rating === filter)
-    .forEach(l => {
-      const state = loadState(l.id);
+  const allListings = [...listings, ...loadCustomListings()];
+  allListings
+    .map(l => ({ l, state: loadState(l.id, l.rating, l.notes) }))
+    .filter(({ state }) => filter === "All" || (state.rating || filter) === filter)
+    .forEach(({ l, state }) => {
       const card = document.createElement("div");
       card.className = "card";
+      const effectiveRating = state.rating || l.rating;
+      const link = l.link || `https://rent.591.com.tw/${l.id}`;
 
-      const tagsHtml = l.features.map(f => `<span class="tag">${f}</span>`).join("")
+      const tagsHtml = (l.features || []).map(f => `<span class="tag">${f}</span>`).join("")
         + (l.fee ? `<span class="tag ${feeClass[l.fee] || ''}">${l.fee}</span>` : "")
         + (l.elevator ? `<span class="tag">🛗 Elevator</span>` : "");
 
       card.innerHTML = `
         <div class="card-top">
-          <span class="rating ${ratingClass[l.rating]}">${l.rating}</span>
+          <select class="rating ${ratingClass[effectiveRating]}" id="rating-${l.id}">
+            ${ratingOptions.map(r => `<option value="${r}" ${r === effectiveRating ? 'selected' : ''}>${r}</option>`).join("")}
+          </select>
           <span class="rent">NT$${l.rent.toLocaleString()}</span>
         </div>
         <div class="meta">
-          <span>📍 ${l.neighborhood}</span>
+          ${l.neighborhood ? `<span>📍 ${l.neighborhood}</span>` : ""}
           ${l.sqft ? `<span>${l.sqft} 坪</span>` : ""}
           ${l.level ? `<span>Floor ${l.level}</span>` : ""}
-          <span>${l.owner}</span>
+          ${l.owner ? `<span>${l.owner}</span>` : ""}
         </div>
         ${tagsHtml ? `<div class="tags">${tagsHtml}</div>` : ""}
-        ${l.notes ? `<div class="notes-static">${l.notes}</div>` : ""}
-        <a class="link-btn" href="https://rent.591.com.tw/${l.id}" target="_blank" rel="noopener">View on 591 →</a>
+        <a class="link-btn" href="${link}" target="_blank" rel="noopener">${link.includes('591.com.tw') ? 'View on 591 →' : 'View listing →'}</a>
 
+        ${l.phoneDisplay ? `
+        <div class="contact-row">
+          <span class="contact-name">${l.contactName || ''} · ${l.phoneDisplay}</span>
+          <a class="contact-btn call" href="tel:${l.tel}">📞 Call</a>
+          ${l.lineId ? `<a class="contact-btn line" href="https://line.me/${l.lineType === 'official' ? 'R/ti/p/@' : 'ti/p/~'}${l.lineId}" target="_blank" rel="noopener">💬 LINE</a>` : ""}
+        </div>` : ""}
+
+        <div class="form-row">
+          <label for="prenote-${l.id}">Notes before visiting</label>
+          <textarea id="prenote-${l.id}" placeholder="e.g. far from bus stop, no washing machine...">${state.preNote || ""}</textarea>
+        </div>
         <div class="form-row">
           <label for="date-${l.id}">Appointment date</label>
           <input type="date" id="date-${l.id}" value="${state.date}">
@@ -295,44 +466,70 @@ function render(filter) {
           <textarea id="note-${l.id}" placeholder="e.g. nice light, a bit noisy, landlord was friendly...">${state.note}</textarea>
         </div>
 
-        <div class="actions">
-          <button class="btn-line" data-action="line" data-id="${l.id}">Send via LINE</button>
-          <button class="btn-copy" data-action="copy" data-id="${l.id}">Copy message</button>
+        <div class="form-row">
+          <label>Take it or leave it?</label>
+          <div class="decision-row" id="decision-${l.id}">
+            <button type="button" class="decision-btn take ${state.decision === 'take' ? 'selected take' : ''}" data-decision="take">✅ Take it</button>
+            <button type="button" class="decision-btn leave ${state.decision === 'leave' ? 'selected leave' : ''}" data-decision="leave">❌ Leave it</button>
+            <button type="button" class="decision-btn unsure ${state.decision === 'unsure' ? 'selected unsure' : ''}" data-decision="unsure">🤔 Not sure</button>
+          </div>
         </div>
+
         <span class="saved-badge" id="saved-${l.id}">Saved ✓</span>
+        ${l.custom ? `<button type="button" class="remove-btn" data-remove="${l.id}">✕ Remove this place</button>` : ""}
       `;
       listEl.appendChild(card);
 
       const dateInput = card.querySelector(`#date-${l.id}`);
       const noteInput = card.querySelector(`#note-${l.id}`);
+      const preNoteInput = card.querySelector(`#prenote-${l.id}`);
       const savedBadge = card.querySelector(`#saved-${l.id}`);
+      const decisionRow = card.querySelector(`#decision-${l.id}`);
+      const ratingSelect = card.querySelector(`#rating-${l.id}`);
+      let currentDecision = state.decision || "";
+      let currentRating = effectiveRating;
 
       const persist = () => {
-        saveState(l.id, { date: dateInput.value, note: noteInput.value });
+        saveState(l.id, { date: dateInput.value, note: noteInput.value, preNote: preNoteInput.value, decision: currentDecision, rating: currentRating });
         savedBadge.classList.add("show");
         clearTimeout(persist._t);
         persist._t = setTimeout(() => savedBadge.classList.remove("show"), 1500);
       };
       dateInput.addEventListener("change", persist);
       noteInput.addEventListener("input", persist);
+      preNoteInput.addEventListener("input", persist);
 
-      card.querySelector('[data-action="line"]').addEventListener("click", () => {
-        const state = { date: dateInput.value, note: noteInput.value };
-        const msg = buildMessage(l, state);
-        window.open(`https://line.me/R/msg/text/?${encodeURIComponent(msg)}`, "_blank");
+      decisionRow.addEventListener("click", (e) => {
+        const btn = e.target.closest(".decision-btn");
+        if (!btn) return;
+        const clicked = btn.dataset.decision;
+        currentDecision = currentDecision === clicked ? "" : clicked;
+        decisionRow.querySelectorAll(".decision-btn").forEach(b => {
+          b.classList.toggle("selected", b.dataset.decision === currentDecision);
+        });
+        persist();
       });
 
-      card.querySelector('[data-action="copy"]').addEventListener("click", async (e) => {
-        const state = { date: dateInput.value, note: noteInput.value };
-        const msg = buildMessage(l, state);
-        try {
-          await navigator.clipboard.writeText(msg);
-          e.target.textContent = "Copied!";
-          setTimeout(() => (e.target.textContent = "Copy message"), 1500);
-        } catch (err) {
-          alert(msg);
+      ratingSelect.addEventListener("change", () => {
+        currentRating = ratingSelect.value;
+        ratingSelect.classList.remove("top", "very", "somewhat");
+        ratingSelect.classList.add(ratingClass[currentRating]);
+        persist();
+        if (currentFilter !== "All" && currentRating !== currentFilter) {
+          render(currentFilter);
         }
       });
+
+      const removeBtn = card.querySelector(`[data-remove="${l.id}"]`);
+      if (removeBtn) {
+        removeBtn.addEventListener("click", () => {
+          if (!confirm("Remove this place from the list?")) return;
+          const updated = loadCustomListings().filter(c => c.id !== l.id);
+          saveCustomListings(updated);
+          localStorage.removeItem(storeKey(l.id));
+          render(currentFilter);
+        });
+      }
     });
 }
 
@@ -341,6 +538,49 @@ document.getElementById("filters").addEventListener("click", (e) => {
   document.querySelectorAll("#filters button").forEach(b => b.classList.remove("active"));
   e.target.classList.add("active");
   render(e.target.dataset.filter);
+});
+
+const addToggle = document.getElementById("add-toggle");
+const addPanel = document.getElementById("add-form");
+addToggle.addEventListener("click", () => {
+  const isOpen = addPanel.classList.toggle("open");
+  addToggle.textContent = isOpen ? "✕ Cancel" : "+ Add a new place";
+});
+
+addPanel.addEventListener("submit", (e) => {
+  e.preventDefault();
+  const link = document.getElementById("new-link").value.trim();
+  const match = link.match(/(\d{6,})/);
+  const id = match ? match[1] : `custom-${Date.now()}`;
+  const phoneDisplay = document.getElementById("new-phone").value.trim();
+
+  const newListing = {
+    id,
+    custom: true,
+    rating: document.getElementById("new-rating").value,
+    neighborhood: document.getElementById("new-neighborhood").value.trim(),
+    rent: Number(document.getElementById("new-rent").value) || 0,
+    sqft: Number(document.getElementById("new-sqft").value) || null,
+    level: document.getElementById("new-level").value.trim(),
+    owner: document.getElementById("new-owner").value,
+    fee: "",
+    elevator: false,
+    features: [],
+    notes: document.getElementById("new-notes").value.trim(),
+    link: link || undefined,
+    contactName: document.getElementById("new-contact-name").value.trim(),
+    phoneDisplay: phoneDisplay || undefined,
+    tel: phoneDisplay ? phoneDisplay.replace(/[^\d,]/g, "") : undefined,
+  };
+
+  const custom = loadCustomListings();
+  custom.push(newListing);
+  saveCustomListings(custom);
+
+  addPanel.reset();
+  addPanel.classList.remove("open");
+  addToggle.textContent = "+ Add a new place";
+  render(currentFilter);
 });
 
 render("All");
