@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>🌇 Apartment Hunt</title>
+<style>
+  :root {
+    --top-pick: #e03e3e;
+    --very: #dfab01;
+    --somewhat: #337ea9;
+    --bg: #faf9f7;
+    --card: #ffffff;
+    --text: #2f2f2f;
+    --muted: #767676;
+    --border: #e6e4e0;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    padding-bottom: 60px;
+  }
+  header {
+    padding: 28px 20px 16px;
+    text-align: center;
+  }
+  header h1 {
+    margin: 0 0 6px;
+    font-size: 1.5rem;
+  }
+  header p {
+    margin: 0;
+    color: var(--muted);
+    font-size: 0.9rem;
+  }
+  .filters {
+    display: flex;
+    gap: 8px;
+    justify-content: center;
+    flex-wrap: wrap;
+    padding: 0 16px 16px;
+  }
+  .filters button {
+    border: 1px solid var(--border);
+    background: var(--card);
+    padding: 6px 14px;
+    border-radius: 20px;
+    font-size: 0.85rem;
+    cursor: pointer;
+    color: var(--text);
+  }
+  .filters button.active {
+    background: var(--text);
+    color: #fff;
+    border-color: var(--text);
+  }
+  .list {
+    max-width: 640px;
+    margin: 0 auto;
+    padding: 0 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 16px 18px;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.03);
+  }
+  .card-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 10px;
+    margin-bottom: 8px;
+  }
+  .rating {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 3px 10px;
+    border-radius: 20px;
+    color: #fff;
+    white-space: nowrap;
+  }
+  .rating.top { background: var(--top-pick); }
+  .rating.very { background: var(--very); color: #3a2e00; }
+  .rating.somewhat { background: var(--somewhat); }
+  .rent {
+    font-size: 1.15rem;
+    font-weight: 700;
+  }
+  .meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 10px;
+    font-size: 0.85rem;
+    color: var(--muted);
+    margin-bottom: 10px;
+  }
+  .meta span { white-space: nowrap; }
+  .tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 12px;
+  }
+  .tag {
+    font-size: 0.72rem;
+    background: #f1efec;
+    border: 1px solid var(--border);
+    padding: 2px 9px;
+    border-radius: 20px;
+    color: var(--text);
+  }
+  .tag.fee-none { background: #ddf3e4; }
+  .tag.fee-low { background: #f0e4fa; }
+  .tag.fee-yes { background: #fbe0e0; }
+  .tag.fee-water { background: #fbe0ee; }
+  .link-btn {
+    display: inline-block;
+    text-decoration: none;
+    background: #111;
+    color: #fff;
+    font-size: 0.85rem;
+    font-weight: 600;
+    padding: 8px 14px;
+    border-radius: 8px;
+    margin-bottom: 14px;
+  }
+  .notes-static {
+    font-size: 0.85rem;
+    color: var(--muted);
+    margin-bottom: 10px;
+    font-style: italic;
+  }
+  .form-row {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-bottom: 10px;
+  }
+  .form-row label {
+    font-size: 0.75rem;
+    color: var(--muted);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+  }
+  .form-row input[type="date"],
+  .form-row textarea {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px 10px;
+    font-size: 0.9rem;
+    font-family: inherit;
+    width: 100%;
+    background: #fdfdfc;
+  }
+  .form-row textarea {
+    min-height: 54px;
+    resize: vertical;
+  }
+  .actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 8px;
+    flex-wrap: wrap;
+  }
+  .actions button {
+    flex: 1;
+    min-width: 120px;
+    border: none;
+    border-radius: 8px;
+    padding: 10px 12px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .btn-line { background: #06C755; color: #fff; }
+  .btn-copy { background: #efefef; color: #2f2f2f; }
+  .saved-badge {
+    font-size: 0.72rem;
+    color: #2b8a3e;
+    margin-top: 6px;
+    display: none;
+  }
+  .saved-badge.show { display: inline-block; }
+  footer {
+    text-align: center;
+    color: var(--muted);
+    font-size: 0.75rem;
+    margin-top: 30px;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🌇 Apartment Hunt</h1>
+  <p>Tap a 591 link to see the listing. After you visit, pick the date and jot a note below — then send it back to me 💛</p>
+</header>
+
+<div class="filters" id="filters">
+  <button data-filter="All" class="active">All</button>
+  <button data-filter="Top pick">Top pick</button>
+  <button data-filter="Very interested">Very interested</button>
+  <button data-filter="Somewhat interested">Somewhat interested</button>
+</div>
+
+<div class="list" id="list"></div>
+
+<footer>Made with 💛 for apartment hunting in Xindian</footer>
+
+<script>
+const listings = [
+  { id: "22109937", rating: "Top pick", neighborhood: "Xindian", rent: 12000, sqft: 5, level: "3F/4F", owner: "Owner", fee: "No-Fee", elevator: false, features: ["washing machine","Water Machine","rent-stabilized"], notes: "" },
+  { id: "22100813", rating: "Very interested", neighborhood: "Xindian", rent: 12500, sqft: 10, level: "2F/3F", owner: "Owner", fee: "Water Free", elevator: false, features: ["washing machine (share)"], notes: "" },
+  { id: "22097513", rating: "Very interested", neighborhood: "Xindian", rent: 13500, sqft: 8, level: "", owner: "Agent", fee: "", elevator: false, features: ["washing machine","Water Machine"], notes: "" },
+  { id: "22135508", rating: "Very interested", neighborhood: "Xindian", rent: 10000, sqft: 5, level: "1F", owner: "Owner", fee: "", elevator: false, features: ["washing machine"], notes: "" },
+  { id: "22100737", rating: "Very interested", neighborhood: "Xindian", rent: 11000, sqft: 8, level: "2F", owner: "Owner", fee: "", elevator: false, features: ["washing machine"], notes: "" },
+  { id: "22056915", rating: "Somewhat interested", neighborhood: "Xindian", rent: 8500, sqft: 9, level: "1F", owner: "Owner", fee: "No-Fee", elevator: false, features: [], notes: "" },
+  { id: "22038129", rating: "Somewhat interested", neighborhood: "Xindian", rent: 8000, sqft: 8, level: "頂層加蓋/1F", owner: "Owner", fee: "No-Fee", elevator: false, features: ["washing machine","rent-stabilized"], notes: "" },
+  { id: "22101540", rating: "Somewhat interested", neighborhood: "Xindian", rent: 11300, sqft: 6, level: "4F", owner: "Agent", fee: "?", elevator: false, features: ["washing machine"], notes: "" },
+  { id: "22064039", rating: "Somewhat interested", neighborhood: "Xindian", rent: 16800, sqft: null, level: "3F", owner: "Owner", fee: "", elevator: false, features: [], notes: "Shared Bathroom" },
+  { id: "22103904", rating: "Somewhat interested", neighborhood: "Xindian", rent: 8500, sqft: 7, level: "5F", owner: "Owner", fee: "?", elevator: false, features: [], notes: "" },
+  { id: "22138815", rating: "Somewhat interested", neighborhood: "Xindian", rent: 15000, sqft: 10, level: "6F", owner: "Agent", fee: "Fee", elevator: true, features: [], notes: "Need to pay Agent fee / service fee: half a month's rent" },
+];
+
+const ratingClass = { "Top pick": "top", "Very interested": "very", "Somewhat interested": "somewhat" };
+const feeClass = { "No-Fee": "fee-none", "Low-Fee": "fee-low", "Fee": "fee-yes", "Water Free": "fee-water", "?": "" };
+
+const storeKey = id => `apt-hunt-${id}`;
+
+function loadState(id) {
+  try {
+    return JSON.parse(localStorage.getItem(storeKey(id))) || { date: "", note: "" };
+  } catch (e) {
+    return { date: "", note: "" };
+  }
+}
+
+function saveState(id, state) {
+  localStorage.setItem(storeKey(id), JSON.stringify(state));
+}
+
+function buildMessage(l, state) {
+  let msg = `🏠 591 #${l.id} (${l.neighborhood}, NT$${l.rent})\n`;
+  if (state.date) msg += `📅 Appointment: ${state.date}\n`;
+  if (state.note) msg += `📝 Note: ${state.note}\n`;
+  msg += `🔗 https://rent.591.com.tw/${l.id}`;
+  return msg;
+}
+
+function render(filter) {
+  const listEl = document.getElementById("list");
+  listEl.innerHTML = "";
+  listings
+    .filter(l => filter === "All" || l.rating === filter)
+    .forEach(l => {
+      const state = loadState(l.id);
+      const card = document.createElement("div");
+      card.className = "card";
+
+      const tagsHtml = l.features.map(f => `<span class="tag">${f}</span>`).join("")
+        + (l.fee ? `<span class="tag ${feeClass[l.fee] || ''}">${l.fee}</span>` : "")
+        + (l.elevator ? `<span class="tag">🛗 Elevator</span>` : "");
+
+      card.innerHTML = `
+        <div class="card-top">
+          <span class="rating ${ratingClass[l.rating]}">${l.rating}</span>
+          <span class="rent">NT$${l.rent.toLocaleString()}</span>
+        </div>
+        <div class="meta">
+          <span>📍 ${l.neighborhood}</span>
+          ${l.sqft ? `<span>${l.sqft} 坪</span>` : ""}
+          ${l.level ? `<span>Floor ${l.level}</span>` : ""}
+          <span>${l.owner}</span>
+        </div>
+        ${tagsHtml ? `<div class="tags">${tagsHtml}</div>` : ""}
+        ${l.notes ? `<div class="notes-static">${l.notes}</div>` : ""}
+        <a class="link-btn" href="https://rent.591.com.tw/${l.id}" target="_blank" rel="noopener">View on 591 →</a>
+
+        <div class="form-row">
+          <label for="date-${l.id}">Appointment date</label>
+          <input type="date" id="date-${l.id}" value="${state.date}">
+        </div>
+        <div class="form-row">
+          <label for="note-${l.id}">Your notes after visiting</label>
+          <textarea id="note-${l.id}" placeholder="e.g. nice light, a bit noisy, landlord was friendly...">${state.note}</textarea>
+        </div>
+
+        <div class="actions">
+          <button class="btn-line" data-action="line" data-id="${l.id}">Send via LINE</button>
+          <button class="btn-copy" data-action="copy" data-id="${l.id}">Copy message</button>
+        </div>
+        <span class="saved-badge" id="saved-${l.id}">Saved ✓</span>
+      `;
+      listEl.appendChild(card);
+
+      const dateInput = card.querySelector(`#date-${l.id}`);
+      const noteInput = card.querySelector(`#note-${l.id}`);
+      const savedBadge = card.querySelector(`#saved-${l.id}`);
+
+      const persist = () => {
+        saveState(l.id, { date: dateInput.value, note: noteInput.value });
+        savedBadge.classList.add("show");
+        clearTimeout(persist._t);
+        persist._t = setTimeout(() => savedBadge.classList.remove("show"), 1500);
+      };
+      dateInput.addEventListener("change", persist);
+      noteInput.addEventListener("input", persist);
+
+      card.querySelector('[data-action="line"]').addEventListener("click", () => {
+        const state = { date: dateInput.value, note: noteInput.value };
+        const msg = buildMessage(l, state);
+        window.open(`https://line.me/R/msg/text/?${encodeURIComponent(msg)}`, "_blank");
+      });
+
+      card.querySelector('[data-action="copy"]').addEventListener("click", async (e) => {
+        const state = { date: dateInput.value, note: noteInput.value };
+        const msg = buildMessage(l, state);
+        try {
+          await navigator.clipboard.writeText(msg);
+          e.target.textContent = "Copied!";
+          setTimeout(() => (e.target.textContent = "Copy message"), 1500);
+        } catch (err) {
+          alert(msg);
+        }
+      });
+    });
+}
+
+document.getElementById("filters").addEventListener("click", (e) => {
+  if (e.target.tagName !== "BUTTON") return;
+  document.querySelectorAll("#filters button").forEach(b => b.classList.remove("active"));
+  e.target.classList.add("active");
+  render(e.target.dataset.filter);
+});
+
+render("All");
+</script>
+
+</body>
+</html>
