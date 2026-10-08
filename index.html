@@ -36,6 +36,21 @@
     color: var(--muted);
     font-size: 0.9rem;
   }
+  .search-row {
+    max-width: 640px;
+    margin: 0 auto;
+    padding: 0 16px 16px;
+  }
+  .search-row input {
+    width: 100%;
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 9px 16px;
+    font-size: 0.9rem;
+    font-family: inherit;
+    background: var(--card);
+    color: var(--text);
+  }
   .filters {
     display: flex;
     gap: 8px;
@@ -366,6 +381,10 @@
 
 <div class="sync-banner" id="sync-banner" style="display:none;"></div>
 
+<div class="search-row">
+  <input type="text" id="search-input" placeholder="🔍 Paste a 591 link, or search by ID, area, or contact name...">
+</div>
+
 <div class="filters" id="filters">
   <button data-filter="All" class="active">All</button>
   <button data-filter="Top pick">Top pick</button>
@@ -603,7 +622,22 @@ const ratingOptions = ["Top pick", "Very interested", "Somewhat interested"];
 let currentFilter = "All";
 let currentDecisionFilter = "All";
 let currentNeighborhoodFilter = "All";
+let searchQuery = "";
 const KNOWN_NEIGHBORHOODS = ["Xindian", "Shenkeng"];
+
+// Lets you paste a 591 link (or just type an ID, area, or contact name) to find
+// a listing already in the list. If the query contains a long number (a 591 ID),
+// that's matched exactly against the listing's ID; otherwise it's a loose text search.
+function matchesSearch(l, query) {
+  const q = query.trim().toLowerCase();
+  if (!q) return true;
+  const idMatch = q.match(/(\d{6,})/);
+  if (idMatch && String(l.id) === idMatch[1]) return true;
+  const link = l.link || `https://rent.591.com.tw/${l.id}`;
+  const haystack = [l.id, link, l.neighborhood, l.contactName, l.notes, l.owner, l.level]
+    .filter(Boolean).join(" ").toLowerCase();
+  return haystack.includes(q);
+}
 const editingIds = new Set(); // IDs of custom listings currently showing the edit-details form
 
 function saveListingDetails(l, updates) {
@@ -675,6 +709,7 @@ function render() {
     .filter(({ l, state }) => currentFilter === "All" || (state.rating || l.rating) === currentFilter)
     .filter(({ state }) => currentDecisionFilter === "All" || state.decision === currentDecisionFilter)
     .filter(({ l }) => currentNeighborhoodFilter === "All" || (l.neighborhood || "").trim() === currentNeighborhoodFilter)
+    .filter(({ l }) => matchesSearch(l, searchQuery))
     .forEach(({ l, state }) => {
       const card = document.createElement("div");
       card.className = "card";
@@ -902,6 +937,11 @@ document.getElementById("decision-filters").addEventListener("click", (e) => {
 document.getElementById("neighborhood-filters").addEventListener("click", (e) => {
   if (e.target.tagName !== "BUTTON") return;
   currentNeighborhoodFilter = e.target.dataset.neighborhood;
+  render();
+});
+
+document.getElementById("search-input").addEventListener("input", (e) => {
+  searchQuery = e.target.value;
   render();
 });
 
