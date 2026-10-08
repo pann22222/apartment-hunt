@@ -139,6 +139,18 @@
     padding: 8px 14px;
     border-radius: 8px;
     margin-bottom: 14px;
+    margin-right: 8px;
+  }
+  .sync-banner {
+    max-width: 640px;
+    margin: 0 auto 16px;
+    padding: 10px 16px;
+    background: #fff3cd;
+    border: 1px solid #d4a017;
+    color: #8a6400;
+    font-size: 0.82rem;
+    border-radius: 10px;
+    text-align: center;
   }
   .contact-row {
     display: flex;
@@ -293,8 +305,10 @@
 
 <header>
   <h1>🌇 Apartment Hunt</h1>
-  <p>Tap a 591 link to see the listing. 💛</p>
+  <p>Tap a 591 link to see the listing. Ratings, notes, dates, and decisions sync automatically between your phone and computer. 💛</p>
 </header>
+
+<div class="sync-banner" id="sync-banner" style="display:none;"></div>
 
 <div class="filters" id="filters">
   <button data-filter="All" class="active">All</button>
@@ -386,9 +400,84 @@ const listings = [
 const ratingClass = { "Top pick": "top", "Very interested": "very", "Somewhat interested": "somewhat" };
 const feeClass = { "No-Fee": "fee-none", "Low-Fee": "fee-low", "Fee": "fee-yes", "Water Free": "fee-water", "?": "" };
 
+// ---- Google Sheets sync ----
+// Paste your Apps Script Web App URL here after you finish the setup steps (ends in /exec).
+// Until this is filled in, the page falls back to saving on this device only (old behavior).
+const SHEET_API_URL = "https://script.google.com/macros/s/AKfycbyttJJmN_A4xor30xAG-Iis_FHJn6tg8OahFBKyR5xaAFDfbHr9z3OXMsD1wkWhrpw/exec";
+const sheetConfigured = () => !!SHEET_API_URL;
+
+let sheetRowsById = {};   // cache of the sheet's rows, keyed by listing ID, filled in by init()
+let sheetAvailable = false; // true once we've successfully loaded from the sheet at least once
+
+function indexRows(rows) {
+  const map = {};
+  rows.forEach(r => { if (r.ID !== undefined && r.ID !== "") map[String(r.ID)] = r; });
+  return map;
+}
+
+async function fetchSheetData() {
+  try {
+    const res = await fetch(SHEET_API_URL, { cache: "no-store" });
+    if (!res.ok) throw new Error("bad response");
+    const rows = await res.json();
+    return Array.isArray(rows) ? rows : [];
+  } catch (e) {
+    return null;
+  }
+}
+
+function postSheetRow(row) {
+  if (!sheetConfigured()) return;
+  // text/plain avoids a CORS preflight that Apps Script web apps don't handle.
+  fetch(SHEET_API_URL, {
+    method: "POST",
+    headers: { "Content-Type": "text/plain;charset=utf-8" },
+    body: JSON.stringify(row),
+  }).catch(() => { /* silent — local cache below still has the latest value */ });
+}
+
+function showSyncBanner(text) {
+  const banner = document.getElementById("sync-banner");
+  if (!text) { banner.style.display = "none"; return; }
+  banner.textContent = text;
+  banner.style.display = "block";
+}
+
+function sheetRowToListing(r) {
+  return {
+    id: String(r.ID),
+    custom: true,
+    rating: r.Rating || "Somewhat interested",
+    neighborhood: r.Neighborhood || "",
+    rent: Number(r.Rent) || 0,
+    sqft: r.Sqft ? Number(r.Sqft) : null,
+    level: r.Level || "",
+    owner: r.Owner || "",
+    fee: "",
+    elevator: false,
+    features: [],
+    notes: r.Notes || "",
+    link: r.Link || undefined,
+    contactName: r.ContactName || "",
+    phoneDisplay: r.PhoneDisplay || undefined,
+    tel: r.PhoneDisplay ? String(r.PhoneDisplay).replace(/[^\d,]/g, "") : undefined,
+  };
+}
+
 const storeKey = id => `apt-hunt-${id}`;
 
 function loadState(id, defaultRating, defaultPreNote) {
+  if (sheetAvailable && sheetRowsById[id]) {
+    const r = sheetRowsById[id];
+    return {
+      date: r.Date || "",
+      note: r.Note || "",
+      preNote: r.PreNote || defaultPreNote || "",
+      decision: r.Decision || "",
+      rating: r.Rating || defaultRating,
+      deleted: r.Deleted === true || r.Deleted === "TRUE" || r.Deleted === "true",
+    };
+  }
   try {
     const stored = JSON.parse(localStorage.getItem(storeKey(id)));
     return stored || { date: "", note: "", decision: "", rating: defaultRating, preNote: defaultPreNote || "" };
@@ -400,16 +489,36 @@ function loadState(id, defaultRating, defaultPreNote) {
 function saveState(id, state) {
   try {
     localStorage.setItem(storeKey(id), JSON.stringify(state));
-    return true;
   } catch (e) {
-    alert("Couldn't save this — your browser is blocking storage on this page (common if you opened the file directly instead of via its https:// link). Try viewing the page through its live GitHub Pages URL instead.");
-    return false;
+    if (!sheetConfigured()) {
+      alert("Couldn't save this — your browser is blocking storage on this page (common if you opened the file directly instead of via its https:// link). Try viewing the page through its live GitHub Pages URL instead.");
+      return false;
+    }
   }
+  if (sheetConfigured()) {
+    const row = Object.assign({}, sheetRowsById[id], {
+      ID: id,
+      Rating: state.rating,
+      Decision: state.decision,
+      Date: state.date,
+      Note: state.note,
+      PreNote: state.preNote,
+      Deleted: !!state.deleted,
+    });
+    sheetRowsById[id] = row;
+    postSheetRow(row);
+  }
+  return true;
 }
 
 const CUSTOM_KEY = "apt-hunt-custom-list";
 
 function loadCustomListings() {
+  if (sheetAvailable) {
+    return Object.values(sheetRowsById)
+      .filter(r => (r.Custom === true || r.Custom === "TRUE") && !listings.some(l => l.id === String(r.ID)))
+      .map(sheetRowToListing);
+  }
   try {
     const stored = JSON.parse(localStorage.getItem(CUSTOM_KEY));
     return Array.isArray(stored) ? stored : [];
@@ -512,6 +621,7 @@ function render() {
 
       const persist = () => {
         saveState(l.id, { date: dateInput.value, note: noteInput.value, preNote: preNoteInput.value, decision: currentDecision, rating: currentRating });
+        savedBadge.textContent = sheetConfigured() ? "Synced ☁️" : "Saved on this device ✓";
         savedBadge.classList.add("show");
         clearTimeout(persist._t);
         persist._t = setTimeout(() => savedBadge.classList.remove("show"), 1500);
@@ -547,7 +657,7 @@ function render() {
       const removeBtn = card.querySelector(`[data-remove="${l.id}"]`);
       removeBtn.addEventListener("click", () => {
         if (!confirm("Remove this place from the list?")) return;
-        if (l.custom) {
+        if (l.custom && !sheetConfigured()) {
           const updated = loadCustomListings().filter(c => c.id !== l.id);
           saveCustomListings(updated);
           localStorage.removeItem(storeKey(l.id));
@@ -595,28 +705,34 @@ addPanel.addEventListener("submit", (e) => {
     return;
   }
 
-  const newListing = {
-    id,
-    custom: true,
-    rating: document.getElementById("new-rating").value,
-    neighborhood: document.getElementById("new-neighborhood").value.trim(),
-    rent: Number(document.getElementById("new-rent").value) || 0,
-    sqft: Number(document.getElementById("new-sqft").value) || null,
-    level: document.getElementById("new-level").value.trim(),
-    owner: document.getElementById("new-owner").value,
-    fee: "",
-    elevator: false,
-    features: [],
-    notes: document.getElementById("new-notes").value.trim(),
-    link: link || undefined,
-    contactName: document.getElementById("new-contact-name").value.trim(),
-    phoneDisplay: phoneDisplay || undefined,
-    tel: phoneDisplay ? phoneDisplay.replace(/[^\d,]/g, "") : undefined,
-  };
+  const neighborhood = document.getElementById("new-neighborhood").value.trim();
+  const rent = Number(document.getElementById("new-rent").value) || 0;
+  const sqft = Number(document.getElementById("new-sqft").value) || null;
+  const level = document.getElementById("new-level").value.trim();
+  const owner = document.getElementById("new-owner").value;
+  const rating = document.getElementById("new-rating").value;
+  const contactName = document.getElementById("new-contact-name").value.trim();
+  const notes = document.getElementById("new-notes").value.trim();
 
-  const custom = loadCustomListings();
-  custom.push(newListing);
-  if (!saveCustomListings(custom)) return;
+  if (sheetConfigured()) {
+    const row = {
+      ID: id, Custom: true, Rating: rating, Decision: "", Date: "", Note: "", PreNote: "", Deleted: false,
+      Neighborhood: neighborhood, Rent: rent, Sqft: sqft, Level: level, Owner: owner,
+      ContactName: contactName, PhoneDisplay: phoneDisplay, Tel: phoneDisplay.replace(/[^\d,]/g, ""),
+      Link: link, Notes: notes,
+    };
+    sheetRowsById[id] = row;
+    postSheetRow(row);
+  } else {
+    const newListing = {
+      id, custom: true, rating, neighborhood, rent, sqft, level, owner, fee: "", elevator: false,
+      features: [], notes, link: link || undefined, contactName, phoneDisplay: phoneDisplay || undefined,
+      tel: phoneDisplay ? phoneDisplay.replace(/[^\d,]/g, "") : undefined,
+    };
+    const custom = loadCustomListings();
+    custom.push(newListing);
+    if (!saveCustomListings(custom)) return;
+  }
 
   addPanel.reset();
   addPanel.classList.remove("open");
@@ -624,7 +740,37 @@ addPanel.addEventListener("submit", (e) => {
   render();
 });
 
-render();
+async function init() {
+  if (sheetConfigured()) {
+    const rows = await fetchSheetData();
+    if (rows) {
+      sheetRowsById = indexRows(rows);
+      sheetAvailable = true;
+      showSyncBanner(null);
+    } else {
+      sheetAvailable = false;
+      showSyncBanner("⚠️ Couldn't reach the Google Sheet right now — showing what's saved on this device instead.");
+    }
+  } else {
+    showSyncBanner("⚠️ Not connected to Google Sheets yet — changes only save on this device until setup is finished.");
+  }
+  render();
+}
+
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible" && sheetConfigured()) {
+    fetchSheetData().then(rows => {
+      if (rows) {
+        sheetRowsById = indexRows(rows);
+        sheetAvailable = true;
+        showSyncBanner(null);
+        render();
+      }
+    });
+  }
+});
+
+init();
 </script>
 
 </body>
