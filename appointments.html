@@ -161,6 +161,13 @@
   .appt-prenote {
     font-style: italic;
   }
+  .appt-note-preview {
+    font-size: 0.85rem;
+    color: var(--text);
+    margin: 4px 0 2px;
+    white-space: pre-line;
+    cursor: pointer;
+  }
   .appt-detail-panel label {
     font-size: 0.78rem;
     font-weight: 600;
@@ -538,6 +545,9 @@ function apptItemHtml(l, state) {
         ${decisionTag}
         <span class="expand-caret">${expanded ? "▲" : "▼"}</span>
       </div>
+      ${!expanded && (state.note || state.preNote) ? `
+        <div class="appt-note-preview" data-toggle="${l.id}">📝 ${escapeHtml(state.note || state.preNote)}</div>
+      ` : ""}
       <div class="appt-item-sub" data-toggle="${l.id}">
         ${l.contactName || l.phoneDisplay ? `<span>${escapeHtml(l.contactName || "")}${l.contactName && l.phoneDisplay ? " · " : ""}${escapeHtml(l.phoneDisplay || "")}</span>` : ""}
         ${l.tel ? `<a class="call-btn" href="tel:${l.tel}">📞 Call</a>` : ""}
