@@ -293,7 +293,7 @@
 
 <header>
   <h1>🌇 Apartment Hunt</h1>
-  <p>Tap a 591 link to see the listing. After you visit, pick the date and jot a note below — then send it back to me 💛</p>
+  <p>Tap a 591 link to see the listing. 💛</p>
 </header>
 
 <div class="filters" id="filters">
@@ -301,6 +301,13 @@
   <button data-filter="Top pick">Top pick</button>
   <button data-filter="Very interested">Very interested</button>
   <button data-filter="Somewhat interested">Somewhat interested</button>
+</div>
+
+<div class="filters" id="decision-filters">
+  <button data-decision="All" class="active">All decisions</button>
+  <button data-decision="take">✅ Take it</button>
+  <button data-decision="leave">❌ Leave it</button>
+  <button data-decision="unsure">🤔 Not sure</button>
 </div>
 
 <div class="add-section">
@@ -359,7 +366,7 @@
 
 <div class="list" id="list"></div>
 
-<footer>Made with 💛 for apartment hunting in Xindian</footer>
+<footer>Made with 💛 for apartment hunting </footer>
 
 <script>
 const listings = [
@@ -411,15 +418,17 @@ function saveCustomListings(arr) {
 
 const ratingOptions = ["Top pick", "Very interested", "Somewhat interested"];
 let currentFilter = "All";
+let currentDecisionFilter = "All";
 
-function render(filter) {
-  currentFilter = filter;
+function render() {
   const listEl = document.getElementById("list");
   listEl.innerHTML = "";
   const allListings = [...listings, ...loadCustomListings()];
   allListings
     .map(l => ({ l, state: loadState(l.id, l.rating, l.notes) }))
-    .filter(({ state }) => filter === "All" || (state.rating || filter) === filter)
+    .filter(({ state }) => !state.deleted)
+    .filter(({ l, state }) => currentFilter === "All" || (state.rating || l.rating) === currentFilter)
+    .filter(({ state }) => currentDecisionFilter === "All" || state.decision === currentDecisionFilter)
     .forEach(({ l, state }) => {
       const card = document.createElement("div");
       card.className = "card";
@@ -476,7 +485,7 @@ function render(filter) {
         </div>
 
         <span class="saved-badge" id="saved-${l.id}">Saved ✓</span>
-        ${l.custom ? `<button type="button" class="remove-btn" data-remove="${l.id}">✕ Remove this place</button>` : ""}
+        <button type="button" class="remove-btn" data-remove="${l.id}">✕ Remove from list</button>
       `;
       listEl.appendChild(card);
 
@@ -508,6 +517,9 @@ function render(filter) {
           b.classList.toggle("selected", b.dataset.decision === currentDecision);
         });
         persist();
+        if (currentDecisionFilter !== "All" && currentDecision !== currentDecisionFilter) {
+          render();
+        }
       });
 
       ratingSelect.addEventListener("change", () => {
@@ -516,20 +528,22 @@ function render(filter) {
         ratingSelect.classList.add(ratingClass[currentRating]);
         persist();
         if (currentFilter !== "All" && currentRating !== currentFilter) {
-          render(currentFilter);
+          render();
         }
       });
 
       const removeBtn = card.querySelector(`[data-remove="${l.id}"]`);
-      if (removeBtn) {
-        removeBtn.addEventListener("click", () => {
-          if (!confirm("Remove this place from the list?")) return;
+      removeBtn.addEventListener("click", () => {
+        if (!confirm("Remove this place from the list?")) return;
+        if (l.custom) {
           const updated = loadCustomListings().filter(c => c.id !== l.id);
           saveCustomListings(updated);
           localStorage.removeItem(storeKey(l.id));
-          render(currentFilter);
-        });
-      }
+        } else {
+          saveState(l.id, { ...state, deleted: true });
+        }
+        render();
+      });
     });
 }
 
@@ -537,7 +551,16 @@ document.getElementById("filters").addEventListener("click", (e) => {
   if (e.target.tagName !== "BUTTON") return;
   document.querySelectorAll("#filters button").forEach(b => b.classList.remove("active"));
   e.target.classList.add("active");
-  render(e.target.dataset.filter);
+  currentFilter = e.target.dataset.filter;
+  render();
+});
+
+document.getElementById("decision-filters").addEventListener("click", (e) => {
+  if (e.target.tagName !== "BUTTON") return;
+  document.querySelectorAll("#decision-filters button").forEach(b => b.classList.remove("active"));
+  e.target.classList.add("active");
+  currentDecisionFilter = e.target.dataset.decision;
+  render();
 });
 
 const addToggle = document.getElementById("add-toggle");
@@ -553,6 +576,12 @@ addPanel.addEventListener("submit", (e) => {
   const match = link.match(/(\d{6,})/);
   const id = match ? match[1] : `custom-${Date.now()}`;
   const phoneDisplay = document.getElementById("new-phone").value.trim();
+
+  const existingIds = [...listings, ...loadCustomListings()].map(x => x.id);
+  if (match && existingIds.includes(id)) {
+    alert("This 591 listing is already in the list!");
+    return;
+  }
 
   const newListing = {
     id,
@@ -580,10 +609,10 @@ addPanel.addEventListener("submit", (e) => {
   addPanel.reset();
   addPanel.classList.remove("open");
   addToggle.textContent = "+ Add a new place";
-  render(currentFilter);
+  render();
 });
 
-render("All");
+render();
 </script>
 
 </body>
