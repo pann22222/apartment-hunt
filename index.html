@@ -740,21 +740,30 @@ addPanel.addEventListener("submit", (e) => {
   render();
 });
 
-async function init() {
+function init() {
+  // Render immediately with whatever's cached locally so the page never looks blank
+  // or stuck — the Google Sheet round-trip can take a few seconds, especially on a
+  // cold start, so we don't want the user staring at nothing while it loads.
   if (sheetConfigured()) {
-    const rows = await fetchSheetData();
-    if (rows) {
-      sheetRowsById = indexRows(rows);
-      sheetAvailable = true;
-      showSyncBanner(null);
-    } else {
-      sheetAvailable = false;
-      showSyncBanner("⚠️ Couldn't reach the Google Sheet right now — showing what's saved on this device instead.");
-    }
+    showSyncBanner("⏳ Loading latest data from Google Sheets…");
   } else {
     showSyncBanner("⚠️ Not connected to Google Sheets yet — changes only save on this device until setup is finished.");
   }
   render();
+
+  if (sheetConfigured()) {
+    fetchSheetData().then(rows => {
+      if (rows) {
+        sheetRowsById = indexRows(rows);
+        sheetAvailable = true;
+        showSyncBanner(null);
+      } else {
+        sheetAvailable = false;
+        showSyncBanner("⚠️ Couldn't reach the Google Sheet right now — showing what's saved on this device instead.");
+      }
+      render();
+    });
+  }
 }
 
 document.addEventListener("visibilitychange", () => {
