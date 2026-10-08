@@ -398,7 +398,13 @@ function loadState(id, defaultRating, defaultPreNote) {
 }
 
 function saveState(id, state) {
-  localStorage.setItem(storeKey(id), JSON.stringify(state));
+  try {
+    localStorage.setItem(storeKey(id), JSON.stringify(state));
+    return true;
+  } catch (e) {
+    alert("Couldn't save this — your browser is blocking storage on this page (common if you opened the file directly instead of via its https:// link). Try viewing the page through its live GitHub Pages URL instead.");
+    return false;
+  }
 }
 
 const CUSTOM_KEY = "apt-hunt-custom-list";
@@ -413,7 +419,13 @@ function loadCustomListings() {
 }
 
 function saveCustomListings(arr) {
-  localStorage.setItem(CUSTOM_KEY, JSON.stringify(arr));
+  try {
+    localStorage.setItem(CUSTOM_KEY, JSON.stringify(arr));
+    return true;
+  } catch (e) {
+    alert("Couldn't save this — your browser is blocking storage on this page (common if you opened the file directly instead of via its https:// link). Try viewing the page through its live GitHub Pages URL instead.");
+    return false;
+  }
 }
 
 const ratingOptions = ["Top pick", "Very interested", "Somewhat interested"];
@@ -604,7 +616,7 @@ addPanel.addEventListener("submit", (e) => {
 
   const custom = loadCustomListings();
   custom.push(newListing);
-  saveCustomListings(custom);
+  if (!saveCustomListings(custom)) return;
 
   addPanel.reset();
   addPanel.classList.remove("open");
