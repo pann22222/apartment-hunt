@@ -491,7 +491,7 @@ const feeClass = { "No-Fee": "fee-none", "Low-Fee": "fee-low", "Fee": "fee-yes",
 // ---- Google Sheets sync ----
 // Paste your Apps Script Web App URL here after you finish the setup steps (ends in /exec).
 // Until this is filled in, the page falls back to saving on this device only (old behavior).
-const SHEET_API_URL = "https://script.google.com/macros/s/AKfycbyttJJmN_A4xor30xAG-Iis_FHJn6tg8OahFBKyR5xaAFDfbHr9z3OXMsD1wkWhrpw/exec";
+const SHEET_API_URL = "https://script.google.com/macros/s/AKfycbw7-fvhpfQk8sLQiSn8FUDo2WNW_Z6BNVoAIPZ-8Rt0xhPhBcMTR4xKd165nzPO0bo/exec";
 const sheetConfigured = () => !!SHEET_API_URL;
 
 let sheetRowsById = {};   // cache of the sheet's rows, keyed by listing ID, filled in by init()
@@ -505,7 +505,11 @@ let sheetAvailable = false; // true once we've successfully loaded from the shee
 function normalizeDateStr(v) {
   if (!v) return "";
   const s = String(v);
-  const plain = s.match(/^(\d{4}-\d{2}-\d{2})/);
+  // Only trust a bare yyyy-MM-dd. A full timestamp like
+  // "2026-10-11T17:00:00.000Z" is midnight Monday in Thailand but its first
+  // 10 characters are the UTC date (Sunday), so parse it as a real Date and
+  // read the local calendar date instead.
+  const plain = s.match(/^(\d{4}-\d{2}-\d{2})$/);
   if (plain) return plain[1];
   const parsed = new Date(s);
   if (!isNaN(parsed)) {
