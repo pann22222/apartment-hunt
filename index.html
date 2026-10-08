@@ -551,6 +551,7 @@ async function fetchSheetData(attempt = 1) {
 
 function postSheetRow(row) {
   if (!sheetConfigured()) return;
+  saveSheetCache();
   // text/plain avoids a CORS preflight that Apps Script web apps don't handle.
   fetch(SHEET_API_URL, {
     method: "POST",
@@ -570,12 +571,34 @@ document.getElementById("sync-banner").addEventListener("click", (e) => {
   if (e.target && e.target.id === "retry-sync-btn") syncFromSheet();
 });
 
+// Google Apps Script often takes 5–40s to answer, so keep a copy of the
+// last good response on this device and show it straight away while the
+// fresh data loads in the background.
+const SHEET_CACHE_KEY = "apt-hunt-sheet-cache";
+
+function loadSheetCache() {
+  try { return JSON.parse(localStorage.getItem(SHEET_CACHE_KEY)); } catch (e) { return null; }
+}
+
+function saveSheetCache() {
+  try { localStorage.setItem(SHEET_CACHE_KEY, JSON.stringify(Object.values(sheetRowsById))); } catch (e) { /* best effort */ }
+}
+
 function syncFromSheet() {
-  showSyncBanner("⏳ Loading latest data from Google Sheets…");
+  const cached = loadSheetCache();
+  if (Array.isArray(cached) && cached.length) {
+    sheetRowsById = indexRows(cached);
+    sheetAvailable = true;
+    render();
+    showSyncBanner("🔄 Showing saved data — checking Google Sheets for updates…");
+  } else {
+    showSyncBanner("⏳ Loading latest data from Google Sheets…");
+  }
   return fetchSheetData().then(rows => {
     if (rows) {
       sheetRowsById = indexRows(rows);
       sheetAvailable = true;
+      saveSheetCache();
       showSyncBanner(null);
     } else {
       sheetAvailable = false;
@@ -583,6 +606,28 @@ function syncFromSheet() {
     }
     render();
   });
+}
+
+// Built-in listings can have their details edited too; those edits are saved
+// in the sheet row, so lay any filled-in sheet values over the built-in ones.
+function withSheetDetails(l) {
+  const r = sheetAvailable && sheetRowsById[l.id];
+  if (!r) return l;
+  const out = Object.assign({}, l);
+  const has = v => v !== undefined && v !== null && v !== "";
+  if (has(r.Neighborhood)) out.neighborhood = r.Neighborhood;
+  if (has(r.Rent)) out.rent = Number(r.Rent) || out.rent;
+  if (has(r.Sqft)) out.sqft = Number(r.Sqft) || out.sqft;
+  if (has(r.Level)) out.level = r.Level;
+  if (has(r.Owner)) out.owner = r.Owner;
+  if (has(r.ContactName)) out.contactName = r.ContactName;
+  if (has(r.PhoneDisplay)) {
+    out.phoneDisplay = r.PhoneDisplay;
+    out.tel = String(r.PhoneDisplay).replace(/[^\d,]/g, "");
+  }
+  if (has(r.Link)) out.link = r.Link;
+  if (has(r.Notes)) out.notes = r.Notes;
+  return out;
 }
 
 function sheetRowToListing(r) {
@@ -705,7 +750,7 @@ function saveListingDetails(l, updates) {
   if (sheetConfigured()) {
     const row = Object.assign({}, sheetRowsById[l.id], {
       ID: l.id,
-      Custom: true,
+      Custom: !!l.custom,
       Neighborhood: updates.neighborhood,
       Rent: updates.rent,
       Sqft: updates.sqft,
@@ -748,7 +793,7 @@ function escapeHtml(str) {
 function render() {
   const listEl = document.getElementById("list");
   listEl.innerHTML = "";
-  const allListings = [...listings, ...loadCustomListings()];
+  const allListings = [...listings.map(withSheetDetails), ...loadCustomListings()];
 
   // Neighborhood filter buttons are generated dynamically since neighborhoods
   // are free text (not a fixed set like rating/decision) and grow as listings are added.
@@ -781,7 +826,7 @@ function render() {
         + (l.fee ? `<span class="tag ${feeClass[l.fee] || ''}">${l.fee}</span>` : "")
         + (l.elevator ? `<span class="tag">🛗 Elevator</span>` : "");
 
-      const isEditing = l.custom && editingIds.has(l.id);
+      const isEditing = editingIds.has(l.id);
 
       const detailsHtml = isEditing ? `
         <div class="edit-panel" id="edit-${l.id}">
@@ -879,7 +924,7 @@ function render() {
         </div>
 
         <span class="saved-badge" id="saved-${l.id}">Saved ✓</span>
-        ${l.custom && !isEditing ? `<button type="button" class="edit-toggle-btn" data-edit-toggle="${l.id}">✏️ Edit details</button>` : ""}
+        ${!isEditing ? `<button type="button" class="edit-toggle-btn" data-edit-toggle="${l.id}">✏️ Edit details</button>` : ""}
         <button type="button" class="remove-btn" data-remove="${l.id}">✕ Remove from list</button>
       `;
       listEl.appendChild(card);
@@ -941,7 +986,7 @@ function render() {
         render();
       });
 
-      if (l.custom) {
+      {
         const editToggleBtn = card.querySelector(`[data-edit-toggle="${l.id}"]`);
         if (editToggleBtn) {
           editToggleBtn.addEventListener("click", () => {

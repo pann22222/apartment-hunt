@@ -198,6 +198,21 @@
     cursor: pointer;
   }
   .appt-save-btn { background: #1c6fd1; color: #fff; }
+  .appt-decision-row { display: flex; gap: 8px; margin-top: 4px; }
+  .decision-btn {
+    flex: 1;
+    border: 1px solid var(--border);
+    background: #fdfdfc;
+    padding: 8px 6px;
+    border-radius: 8px;
+    font-size: 0.82rem;
+    font-weight: 600;
+    cursor: pointer;
+    color: var(--text);
+  }
+  .decision-btn.selected.take { background: #ddf3e4; border-color: #2b8a3e; color: #1d6b2d; }
+  .decision-btn.selected.leave { background: #fbe0e0; border-color: #c92a2a; color: #a61e1e; }
+  .decision-btn.selected.unsure { background: #fff3cd; border-color: #d4a017; color: #8a6400; }
   .appt-cancel-btn { background: #f0efec; color: var(--text); }
   .rating-dot {
     display: inline-block;
@@ -410,6 +425,28 @@ function syncFromSheet() {
   });
 }
 
+// Built-in listings can have their details edited too; those edits are saved
+// in the sheet row, so lay any filled-in sheet values over the built-in ones.
+function withSheetDetails(l) {
+  const r = sheetAvailable && sheetRowsById[l.id];
+  if (!r) return l;
+  const out = Object.assign({}, l);
+  const has = v => v !== undefined && v !== null && v !== "";
+  if (has(r.Neighborhood)) out.neighborhood = r.Neighborhood;
+  if (has(r.Rent)) out.rent = Number(r.Rent) || out.rent;
+  if (has(r.Sqft)) out.sqft = Number(r.Sqft) || out.sqft;
+  if (has(r.Level)) out.level = r.Level;
+  if (has(r.Owner)) out.owner = r.Owner;
+  if (has(r.ContactName)) out.contactName = r.ContactName;
+  if (has(r.PhoneDisplay)) {
+    out.phoneDisplay = r.PhoneDisplay;
+    out.tel = String(r.PhoneDisplay).replace(/[^\d,]/g, "");
+  }
+  if (has(r.Link)) out.link = r.Link;
+  if (has(r.Notes)) out.notes = r.Notes;
+  return out;
+}
+
 function sheetRowToListing(r) {
   return {
     id: String(r.ID),
@@ -545,9 +582,8 @@ function apptItemHtml(l, state) {
         ${decisionTag}
         <span class="expand-caret">${expanded ? "▲" : "▼"}</span>
       </div>
-      ${!expanded && (state.note || state.preNote) ? `
-        <div class="appt-note-preview" data-toggle="${l.id}">📝 ${escapeHtml(state.note || state.preNote)}</div>
-      ` : ""}
+      ${!expanded && state.preNote ? `<div class="appt-note-preview" data-toggle="${l.id}">📞 ${escapeHtml(state.preNote)}</div>` : ""}
+      ${!expanded && state.note ? `<div class="appt-note-preview" data-toggle="${l.id}">📝 ${escapeHtml(state.note)}</div>` : ""}
       <div class="appt-item-sub" data-toggle="${l.id}">
         ${l.contactName || l.phoneDisplay ? `<span>${escapeHtml(l.contactName || "")}${l.contactName && l.phoneDisplay ? " · " : ""}${escapeHtml(l.phoneDisplay || "")}</span>` : ""}
         ${l.tel ? `<a class="call-btn" href="tel:${l.tel}">📞 Call</a>` : ""}
@@ -556,11 +592,17 @@ function apptItemHtml(l, state) {
       ${expanded ? `
         <div class="appt-detail-panel">
           ${detailBits ? `<div class="appt-detail-line">${escapeHtml(detailBits)}</div>` : ""}
-          ${state.preNote ? `<div class="appt-detail-line appt-prenote">${escapeHtml(state.preNote)}</div>` : ""}
           <label for="appt-date-${l.id}">Appointment date</label>
           <input type="date" id="appt-date-${l.id}" value="${state.date}">
-          <label for="appt-note-${l.id}">Visit notes</label>
+          <label for="appt-prenote-${l.id}">📞 Call notes (before visiting)</label>
+          <textarea id="appt-prenote-${l.id}" rows="2" placeholder="e.g. called, landlord said no pets, call back Tuesday...">${escapeHtml(state.preNote || "")}</textarea>
+          <label for="appt-note-${l.id}">📝 Visit notes</label>
           <textarea id="appt-note-${l.id}" rows="3" placeholder="How did the visit go?">${escapeHtml(state.note || "")}</textarea>
+          <div class="appt-decision-row">
+            <button type="button" class="decision-btn ${state.decision === 'take' ? 'selected take' : ''}" data-decide="${l.id}" data-decision="take">✅ Take it</button>
+            <button type="button" class="decision-btn ${state.decision === 'leave' ? 'selected leave' : ''}" data-decide="${l.id}" data-decision="leave">❌ Leave it</button>
+            <button type="button" class="decision-btn ${state.decision === 'unsure' ? 'selected unsure' : ''}" data-decide="${l.id}" data-decision="unsure">🤔 Not sure</button>
+          </div>
           <div class="appt-detail-actions">
             <button class="appt-save-btn" data-save="${l.id}">💾 Save</button>
             <button class="appt-cancel-btn" data-cancel="${l.id}">Cancel</button>
@@ -572,7 +614,7 @@ function apptItemHtml(l, state) {
 }
 
 async function buildAgenda() {
-  const allListings = [...listings, ...loadCustomListings()];
+  const allListings = [...listings.map(withSheetDetails), ...loadCustomListings()];
   listingsById = {};
   allListings.forEach(l => { listingsById[l.id] = l; });
   const items = allListings
@@ -631,8 +673,30 @@ async function buildAgenda() {
   if (needsSchedule.length === 0) {
     html += `<div class="empty-state">Everything you're still considering already has a date. 🎉</div>`;
   } else {
-    const sortedNeeds = needsSchedule.slice().sort(sortByRating);
-    html += `<div class="date-group">${sortedNeeds.map(({ l, state }) => apptItemHtml(l, state)).join("")}</div>`;
+    // Group by area (Xindian, Shenkeng, then any other area) so visits in
+    // the same neighborhood can be planned for the same day.
+    const byArea = {};
+    needsSchedule.forEach(item => {
+      const area = (item.l.neighborhood || "").trim() || "Other area";
+      (byArea[area] = byArea[area] || []).push(item);
+    });
+    const areaOrder = ["Xindian", "Shenkeng"];
+    const areas = Object.keys(byArea).sort((a, b) => {
+      const ia = areaOrder.indexOf(a), ib = areaOrder.indexOf(b);
+      return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib) || a.localeCompare(b);
+    });
+    areas.forEach(area => {
+      const areaItems = byArea[area].slice().sort(sortByRating);
+      html += `
+        <div class="date-group">
+          <div class="date-heading">
+            <span>📍 ${escapeHtml(area)}</span>
+            <span class="count-badge">${areaItems.length} place${areaItems.length === 1 ? "" : "s"}</span>
+          </div>
+          ${areaItems.map(({ l, state }) => apptItemHtml(l, state)).join("")}
+        </div>
+      `;
+    });
   }
   html += `</div>`;
 
@@ -691,7 +755,28 @@ async function buildAgenda() {
       const dateInput = document.getElementById(`appt-date-${id}`);
       const noteInput = document.getElementById(`appt-note-${id}`);
       const prev = loadState(id, l ? l.rating : undefined, l ? l.notes : undefined);
-      saveApptState(id, { date: dateInput.value, note: noteInput.value, rating: prev.rating, decision: prev.decision, preNote: prev.preNote, deleted: prev.deleted });
+      saveApptState(id, { date: dateInput.value, note: noteInput.value, rating: prev.rating, decision: prev.decision, preNote: document.getElementById(`appt-prenote-${id}`).value, deleted: prev.deleted });
+      editingIds.delete(id);
+      buildAgenda();
+    });
+  });
+
+  // Decision buttons save right away (along with anything typed in the
+  // notes boxes). Tapping the selected one again clears it, which is how a
+  // place gets moved back out of "Passed on".
+  agendaEl.querySelectorAll("[data-decide]").forEach(btn => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const id = btn.dataset.decide;
+      const l = listingsById[id];
+      const prev = loadState(id, l ? l.rating : undefined, l ? l.notes : undefined);
+      const decision = prev.decision === btn.dataset.decision ? "" : btn.dataset.decision;
+      saveApptState(id, {
+        date: document.getElementById(`appt-date-${id}`).value,
+        note: document.getElementById(`appt-note-${id}`).value,
+        preNote: document.getElementById(`appt-prenote-${id}`).value,
+        rating: prev.rating, decision, deleted: prev.deleted,
+      });
       editingIds.delete(id);
       buildAgenda();
     });
