@@ -237,6 +237,62 @@
     cursor: pointer;
     padding: 0;
   }
+  .edit-toggle-btn {
+    display: inline-block;
+    margin-top: 10px;
+    margin-right: 14px;
+    border: none;
+    background: none;
+    color: #1c6fd1;
+    font-size: 0.78rem;
+    cursor: pointer;
+    padding: 0;
+  }
+  .edit-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    background: #fafaf7;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px 16px;
+    margin: 10px 0;
+  }
+  .edit-panel input,
+  .edit-panel select,
+  .edit-panel textarea {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px 10px;
+    font-size: 0.9rem;
+    font-family: inherit;
+    width: 100%;
+    background: #fdfdfc;
+  }
+  .edit-panel textarea { min-height: 50px; resize: vertical; }
+  .edit-actions {
+    display: flex;
+    gap: 10px;
+  }
+  .edit-save {
+    border: none;
+    background: #111;
+    color: #fff;
+    font-weight: 600;
+    padding: 8px 14px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 0.85rem;
+  }
+  .edit-cancel {
+    border: 1px solid var(--border);
+    background: none;
+    color: var(--text);
+    padding: 8px 14px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 0.85rem;
+  }
   .add-section {
     max-width: 640px;
     margin: 0 auto;
@@ -324,6 +380,8 @@
   <button data-decision="unsure">🤔 Not sure</button>
 </div>
 
+<div class="filters" id="neighborhood-filters"></div>
+
 <div class="add-section">
   <button class="add-toggle" id="add-toggle">+ Add a new place</button>
   <form class="add-panel" id="add-form">
@@ -333,7 +391,11 @@
     </div>
     <div class="form-row">
       <label for="new-neighborhood">Neighborhood</label>
-      <input type="text" id="new-neighborhood" placeholder="e.g. Xindian">
+      <input type="text" id="new-neighborhood" placeholder="e.g. Xindian" list="neighborhood-options">
+      <datalist id="neighborhood-options">
+        <option value="Xindian"></option>
+        <option value="Shenkeng"></option>
+      </datalist>
     </div>
     <div class="form-row">
       <label for="new-rent">Rent (NT$)</label>
@@ -540,16 +602,79 @@ function saveCustomListings(arr) {
 const ratingOptions = ["Top pick", "Very interested", "Somewhat interested"];
 let currentFilter = "All";
 let currentDecisionFilter = "All";
+let currentNeighborhoodFilter = "All";
+const KNOWN_NEIGHBORHOODS = ["Xindian", "Shenkeng"];
+const editingIds = new Set(); // IDs of custom listings currently showing the edit-details form
+
+function saveListingDetails(l, updates) {
+  if (sheetConfigured()) {
+    const row = Object.assign({}, sheetRowsById[l.id], {
+      ID: l.id,
+      Custom: true,
+      Neighborhood: updates.neighborhood,
+      Rent: updates.rent,
+      Sqft: updates.sqft,
+      Level: updates.level,
+      Owner: updates.owner,
+      ContactName: updates.contactName,
+      PhoneDisplay: updates.phoneDisplay,
+      Tel: updates.phoneDisplay ? updates.phoneDisplay.replace(/[^\d,]/g, "") : "",
+      Link: updates.link,
+      Notes: updates.notes,
+    });
+    sheetRowsById[l.id] = row;
+    postSheetRow(row);
+  } else {
+    const custom = loadCustomListings().map(c => {
+      if (c.id !== l.id) return c;
+      return Object.assign({}, c, {
+        neighborhood: updates.neighborhood,
+        rent: updates.rent,
+        sqft: updates.sqft,
+        level: updates.level,
+        owner: updates.owner,
+        contactName: updates.contactName,
+        phoneDisplay: updates.phoneDisplay || undefined,
+        tel: updates.phoneDisplay ? updates.phoneDisplay.replace(/[^\d,]/g, "") : undefined,
+        link: updates.link || undefined,
+        notes: updates.notes,
+      });
+    });
+    saveCustomListings(custom);
+  }
+}
+
+function escapeHtml(str) {
+  return String(str).replace(/[&<>"']/g, c => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+  }[c]));
+}
 
 function render() {
   const listEl = document.getElementById("list");
   listEl.innerHTML = "";
   const allListings = [...listings, ...loadCustomListings()];
+
+  // Neighborhood filter buttons are generated dynamically since neighborhoods
+  // are free text (not a fixed set like rating/decision) and grow as listings are added.
+  // KNOWN_NEIGHBORHOODS are always shown as options even before any listing uses them.
+  const neighborhoods = [...new Set([
+    ...KNOWN_NEIGHBORHOODS,
+    ...allListings.map(l => (l.neighborhood || "").trim()).filter(Boolean),
+  ])].sort((a, b) => a.localeCompare(b));
+  if (currentNeighborhoodFilter !== "All" && !neighborhoods.includes(currentNeighborhoodFilter)) {
+    currentNeighborhoodFilter = "All";
+  }
+  const nbEl = document.getElementById("neighborhood-filters");
+  nbEl.innerHTML = `<button data-neighborhood="All" class="${currentNeighborhoodFilter === "All" ? "active" : ""}">All areas</button>`
+    + neighborhoods.map(n => `<button data-neighborhood="${escapeHtml(n)}" class="${currentNeighborhoodFilter === n ? "active" : ""}">📍 ${escapeHtml(n)}</button>`).join("");
+
   allListings
     .map(l => ({ l, state: loadState(l.id, l.rating, l.notes) }))
     .filter(({ state }) => !state.deleted)
     .filter(({ l, state }) => currentFilter === "All" || (state.rating || l.rating) === currentFilter)
     .filter(({ state }) => currentDecisionFilter === "All" || state.decision === currentDecisionFilter)
+    .filter(({ l }) => currentNeighborhoodFilter === "All" || (l.neighborhood || "").trim() === currentNeighborhoodFilter)
     .forEach(({ l, state }) => {
       const card = document.createElement("div");
       card.className = "card";
@@ -560,13 +685,55 @@ function render() {
         + (l.fee ? `<span class="tag ${feeClass[l.fee] || ''}">${l.fee}</span>` : "")
         + (l.elevator ? `<span class="tag">🛗 Elevator</span>` : "");
 
-      card.innerHTML = `
-        <div class="card-top">
-          <select class="rating ${ratingClass[effectiveRating]}" id="rating-${l.id}">
-            ${ratingOptions.map(r => `<option value="${r}" ${r === effectiveRating ? 'selected' : ''}>${r}</option>`).join("")}
-          </select>
-          <span class="rent">NT$${l.rent.toLocaleString()}</span>
+      const isEditing = l.custom && editingIds.has(l.id);
+
+      const detailsHtml = isEditing ? `
+        <div class="edit-panel" id="edit-${l.id}">
+          <div class="form-row">
+            <label for="edit-link-${l.id}">Listing link</label>
+            <input type="url" id="edit-link-${l.id}" value="${escapeHtml(l.link || '')}">
+          </div>
+          <div class="form-row">
+            <label for="edit-neighborhood-${l.id}">Neighborhood</label>
+            <input type="text" id="edit-neighborhood-${l.id}" value="${escapeHtml(l.neighborhood || '')}" list="neighborhood-options">
+          </div>
+          <div class="form-row">
+            <label for="edit-rent-${l.id}">Rent (NT$)</label>
+            <input type="number" id="edit-rent-${l.id}" value="${l.rent || ''}">
+          </div>
+          <div class="form-row">
+            <label for="edit-sqft-${l.id}">Size (坪)</label>
+            <input type="number" id="edit-sqft-${l.id}" value="${l.sqft || ''}">
+          </div>
+          <div class="form-row">
+            <label for="edit-level-${l.id}">Floor</label>
+            <input type="text" id="edit-level-${l.id}" value="${escapeHtml(l.level || '')}">
+          </div>
+          <div class="form-row">
+            <label for="edit-owner-${l.id}">Owner or agent?</label>
+            <select id="edit-owner-${l.id}">
+              <option value="Owner" ${l.owner === 'Owner' ? 'selected' : ''}>Owner</option>
+              <option value="Agent" ${l.owner === 'Agent' ? 'selected' : ''}>Agent</option>
+            </select>
+          </div>
+          <div class="form-row">
+            <label for="edit-contact-name-${l.id}">Contact name</label>
+            <input type="text" id="edit-contact-name-${l.id}" value="${escapeHtml(l.contactName || '')}">
+          </div>
+          <div class="form-row">
+            <label for="edit-phone-${l.id}">Contact phone</label>
+            <input type="tel" id="edit-phone-${l.id}" value="${escapeHtml(l.phoneDisplay || '')}">
+          </div>
+          <div class="form-row">
+            <label for="edit-notes-${l.id}">Notes</label>
+            <textarea id="edit-notes-${l.id}">${escapeHtml(l.notes || '')}</textarea>
+          </div>
+          <div class="edit-actions">
+            <button type="button" class="edit-save" data-edit-save="${l.id}">💾 Save changes</button>
+            <button type="button" class="edit-cancel" data-edit-cancel="${l.id}">Cancel</button>
+          </div>
         </div>
+      ` : `
         <div class="meta">
           ${l.neighborhood ? `<span>📍 ${l.neighborhood}</span>` : ""}
           ${l.sqft ? `<span>${l.sqft} 坪</span>` : ""}
@@ -582,6 +749,16 @@ function render() {
           <a class="contact-btn call" href="tel:${l.tel}">📞 Call</a>
           ${l.lineId ? `<a class="contact-btn line" href="https://line.me/${l.lineType === 'official' ? 'R/ti/p/@' : 'ti/p/~'}${l.lineId}" target="_blank" rel="noopener">💬 LINE</a>` : ""}
         </div>` : ""}
+      `;
+
+      card.innerHTML = `
+        <div class="card-top">
+          <select class="rating ${ratingClass[effectiveRating]}" id="rating-${l.id}">
+            ${ratingOptions.map(r => `<option value="${r}" ${r === effectiveRating ? 'selected' : ''}>${r}</option>`).join("")}
+          </select>
+          <span class="rent">NT$${l.rent.toLocaleString()}</span>
+        </div>
+        ${detailsHtml}
 
         <div class="form-row">
           <label for="prenote-${l.id}">Notes before visiting</label>
@@ -606,6 +783,7 @@ function render() {
         </div>
 
         <span class="saved-badge" id="saved-${l.id}">Saved ✓</span>
+        ${l.custom && !isEditing ? `<button type="button" class="edit-toggle-btn" data-edit-toggle="${l.id}">✏️ Edit details</button>` : ""}
         <button type="button" class="remove-btn" data-remove="${l.id}">✕ Remove from list</button>
       `;
       listEl.appendChild(card);
@@ -666,6 +844,42 @@ function render() {
         }
         render();
       });
+
+      if (l.custom) {
+        const editToggleBtn = card.querySelector(`[data-edit-toggle="${l.id}"]`);
+        if (editToggleBtn) {
+          editToggleBtn.addEventListener("click", () => {
+            editingIds.add(l.id);
+            render();
+          });
+        }
+        const editSaveBtn = card.querySelector(`[data-edit-save="${l.id}"]`);
+        if (editSaveBtn) {
+          editSaveBtn.addEventListener("click", () => {
+            const updates = {
+              link: card.querySelector(`#edit-link-${l.id}`).value.trim(),
+              neighborhood: card.querySelector(`#edit-neighborhood-${l.id}`).value.trim(),
+              rent: Number(card.querySelector(`#edit-rent-${l.id}`).value) || 0,
+              sqft: Number(card.querySelector(`#edit-sqft-${l.id}`).value) || null,
+              level: card.querySelector(`#edit-level-${l.id}`).value.trim(),
+              owner: card.querySelector(`#edit-owner-${l.id}`).value,
+              contactName: card.querySelector(`#edit-contact-name-${l.id}`).value.trim(),
+              phoneDisplay: card.querySelector(`#edit-phone-${l.id}`).value.trim(),
+              notes: card.querySelector(`#edit-notes-${l.id}`).value.trim(),
+            };
+            saveListingDetails(l, updates);
+            editingIds.delete(l.id);
+            render();
+          });
+        }
+        const editCancelBtn = card.querySelector(`[data-edit-cancel="${l.id}"]`);
+        if (editCancelBtn) {
+          editCancelBtn.addEventListener("click", () => {
+            editingIds.delete(l.id);
+            render();
+          });
+        }
+      }
     });
 }
 
@@ -682,6 +896,12 @@ document.getElementById("decision-filters").addEventListener("click", (e) => {
   document.querySelectorAll("#decision-filters button").forEach(b => b.classList.remove("active"));
   e.target.classList.add("active");
   currentDecisionFilter = e.target.dataset.decision;
+  render();
+});
+
+document.getElementById("neighborhood-filters").addEventListener("click", (e) => {
+  if (e.target.tagName !== "BUTTON") return;
+  currentNeighborhoodFilter = e.target.dataset.neighborhood;
   render();
 });
 
