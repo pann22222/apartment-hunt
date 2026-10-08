@@ -497,19 +497,50 @@ const sheetConfigured = () => !!SHEET_API_URL;
 let sheetRowsById = {};   // cache of the sheet's rows, keyed by listing ID, filled in by init()
 let sheetAvailable = false; // true once we've successfully loaded from the sheet at least once
 
+// Defensive guard: if the Sheet's Date column ever gets auto-converted to a
+// real date type (Google Sheets does this silently for "yyyy-MM-dd"-looking
+// text), Apps Script may hand it back as a timestamp-ish string instead of
+// plain yyyy-MM-dd. Normalize so <input type="date"> and date math always
+// get the format they expect, regardless of what the backend sent.
+function normalizeDateStr(v) {
+  if (!v) return "";
+  const s = String(v);
+  const plain = s.match(/^(\d{4}-\d{2}-\d{2})/);
+  if (plain) return plain[1];
+  const parsed = new Date(s);
+  if (!isNaN(parsed)) {
+    return `${parsed.getFullYear()}-${String(parsed.getMonth() + 1).padStart(2, "0")}-${String(parsed.getDate()).padStart(2, "0")}`;
+  }
+  return "";
+}
+
 function indexRows(rows) {
   const map = {};
   rows.forEach(r => { if (r.ID !== undefined && r.ID !== "") map[String(r.ID)] = r; });
   return map;
 }
 
-async function fetchSheetData() {
+async function fetchSheetDataOnce() {
+  const res = await fetch(SHEET_API_URL, { cache: "no-store" });
+  if (!res.ok) throw new Error("bad response: " + res.status);
+  const rows = await res.json();
+  return Array.isArray(rows) ? rows : [];
+}
+
+// Google Apps Script's web app occasionally glitches on a single request
+// (its response is itself a redirect to a one-time URL, and that hop can
+// fail transiently). Retry a couple of times with a short delay before
+// giving up, and log the real error to the console so it's debuggable
+// via DevTools instead of just silently falling back to local data.
+async function fetchSheetData(attempt = 1) {
   try {
-    const res = await fetch(SHEET_API_URL, { cache: "no-store" });
-    if (!res.ok) throw new Error("bad response");
-    const rows = await res.json();
-    return Array.isArray(rows) ? rows : [];
+    return await fetchSheetDataOnce();
   } catch (e) {
+    console.error(`fetchSheetData attempt ${attempt} failed:`, e);
+    if (attempt < 3) {
+      await new Promise(r => setTimeout(r, 600 * attempt));
+      return fetchSheetData(attempt + 1);
+    }
     return null;
   }
 }
@@ -524,11 +555,30 @@ function postSheetRow(row) {
   }).catch(() => { /* silent — local cache below still has the latest value */ });
 }
 
-function showSyncBanner(text) {
+function showSyncBanner(text, opts = {}) {
   const banner = document.getElementById("sync-banner");
-  if (!text) { banner.style.display = "none"; return; }
-  banner.textContent = text;
+  if (!text) { banner.innerHTML = ""; banner.style.display = "none"; return; }
+  banner.innerHTML = escapeHtml(text) + (opts.retry ? ' <button id="retry-sync-btn" style="margin-left:8px;cursor:pointer;">🔄 Retry</button>' : "");
   banner.style.display = "block";
+}
+
+document.getElementById("sync-banner").addEventListener("click", (e) => {
+  if (e.target && e.target.id === "retry-sync-btn") syncFromSheet();
+});
+
+function syncFromSheet() {
+  showSyncBanner("⏳ Loading latest data from Google Sheets…");
+  return fetchSheetData().then(rows => {
+    if (rows) {
+      sheetRowsById = indexRows(rows);
+      sheetAvailable = true;
+      showSyncBanner(null);
+    } else {
+      sheetAvailable = false;
+      showSyncBanner("⚠️ Couldn't reach the Google Sheet right now — showing what's saved on this device instead.", { retry: true });
+    }
+    render();
+  });
 }
 
 function sheetRowToListing(r) {
@@ -558,7 +608,7 @@ function loadState(id, defaultRating, defaultPreNote) {
   if (sheetAvailable && sheetRowsById[id]) {
     const r = sheetRowsById[id];
     return {
-      date: r.Date || "",
+      date: normalizeDateStr(r.Date),
       note: r.Note || "",
       preNote: r.PreNote || defaultPreNote || "",
       decision: r.Decision || "",
@@ -1019,17 +1069,7 @@ function init() {
   render();
 
   if (sheetConfigured()) {
-    fetchSheetData().then(rows => {
-      if (rows) {
-        sheetRowsById = indexRows(rows);
-        sheetAvailable = true;
-        showSyncBanner(null);
-      } else {
-        sheetAvailable = false;
-        showSyncBanner("⚠️ Couldn't reach the Google Sheet right now — showing what's saved on this device instead.");
-      }
-      render();
-    });
+    syncFromSheet();
   }
 }
 

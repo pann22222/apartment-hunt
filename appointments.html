@@ -138,7 +138,60 @@
     flex-wrap: wrap;
     gap: 8px;
     margin-bottom: 6px;
+    cursor: pointer;
   }
+  .appt-item-sub { cursor: pointer; }
+  .expand-caret {
+    margin-left: auto;
+    color: var(--muted);
+    font-size: 0.7rem;
+  }
+  .appt-detail-panel {
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px dashed var(--border);
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .appt-detail-line {
+    font-size: 0.82rem;
+    color: var(--muted);
+  }
+  .appt-prenote {
+    font-style: italic;
+  }
+  .appt-detail-panel label {
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--muted);
+    margin-top: 2px;
+  }
+  .appt-detail-panel input[type="date"],
+  .appt-detail-panel textarea {
+    width: 100%;
+    padding: 7px 10px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font-size: 0.88rem;
+    font-family: inherit;
+    resize: vertical;
+  }
+  .appt-detail-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 4px;
+  }
+  .appt-save-btn, .appt-cancel-btn {
+    border: none;
+    border-radius: 8px;
+    padding: 7px 14px;
+    font-size: 0.82rem;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .appt-save-btn { background: #1c6fd1; color: #fff; }
+  .appt-cancel-btn { background: #f0efec; color: var(--text); }
   .rating-dot {
     display: inline-block;
     font-size: 0.7rem;
@@ -239,6 +292,8 @@ const listings = [
 
 const ratingClass = { "Top pick": "top", "Very interested": "very", "Somewhat interested": "somewhat" };
 const ratingRank = { "Top pick": 0, "Very interested": 1, "Somewhat interested": 2 };
+const editingIds = new Set(); // ids currently showing their expanded detail/notes panel
+let listingsById = {}; // refreshed each buildAgenda() — lets click handlers look up a listing by id
 
 // ---- Google Sheets sync (read-only on this page — editing still happens on index.html) ----
 const SHEET_API_URL = "https://script.google.com/macros/s/AKfycbyttJJmN_A4xor30xAG-Iis_FHJn6tg8OahFBKyR5xaAFDfbHr9z3OXMsD1wkWhrpw/exec";
@@ -247,28 +302,78 @@ const sheetConfigured = () => !!SHEET_API_URL;
 let sheetRowsById = {};
 let sheetAvailable = false;
 
+// Defensive guard: if the Sheet's Date column ever gets auto-converted to a
+// real date type (Google Sheets does this silently for "yyyy-MM-dd"-looking
+// text), Apps Script may hand it back as a timestamp-ish string instead of
+// plain yyyy-MM-dd. Normalize so date math and grouping always get the
+// format they expect, regardless of what the backend sent.
+function normalizeDateStr(v) {
+  if (!v) return "";
+  const s = String(v);
+  const plain = s.match(/^(\d{4}-\d{2}-\d{2})/);
+  if (plain) return plain[1];
+  const parsed = new Date(s);
+  if (!isNaN(parsed)) {
+    return `${parsed.getFullYear()}-${String(parsed.getMonth() + 1).padStart(2, "0")}-${String(parsed.getDate()).padStart(2, "0")}`;
+  }
+  return "";
+}
+
 function indexRows(rows) {
   const map = {};
   rows.forEach(r => { if (r.ID !== undefined && r.ID !== "") map[String(r.ID)] = r; });
   return map;
 }
 
-async function fetchSheetData() {
+async function fetchSheetDataOnce() {
+  const res = await fetch(SHEET_API_URL, { cache: "no-store" });
+  if (!res.ok) throw new Error("bad response: " + res.status);
+  const rows = await res.json();
+  return Array.isArray(rows) ? rows : [];
+}
+
+// Google Apps Script's web app occasionally glitches on a single request
+// (its response is itself a redirect to a one-time URL, and that hop can
+// fail transiently). Retry a couple of times with a short delay before
+// giving up, and log the real error to the console so it's debuggable
+// via DevTools instead of just silently falling back to local data.
+async function fetchSheetData(attempt = 1) {
   try {
-    const res = await fetch(SHEET_API_URL, { cache: "no-store" });
-    if (!res.ok) throw new Error("bad response");
-    const rows = await res.json();
-    return Array.isArray(rows) ? rows : [];
+    return await fetchSheetDataOnce();
   } catch (e) {
+    console.error(`fetchSheetData attempt ${attempt} failed:`, e);
+    if (attempt < 3) {
+      await new Promise(r => setTimeout(r, 600 * attempt));
+      return fetchSheetData(attempt + 1);
+    }
     return null;
   }
 }
 
-function showSyncBanner(text) {
+function showSyncBanner(text, opts = {}) {
   const banner = document.getElementById("sync-banner");
-  if (!text) { banner.style.display = "none"; return; }
-  banner.textContent = text;
+  if (!text) { banner.innerHTML = ""; banner.style.display = "none"; return; }
+  banner.innerHTML = escapeHtml(text) + (opts.retry ? ' <button id="retry-sync-btn" style="margin-left:8px;cursor:pointer;">🔄 Retry</button>' : "");
   banner.style.display = "block";
+}
+
+document.getElementById("sync-banner").addEventListener("click", (e) => {
+  if (e.target && e.target.id === "retry-sync-btn") syncFromSheet();
+});
+
+function syncFromSheet() {
+  showSyncBanner("⏳ Loading latest data from Google Sheets…");
+  return fetchSheetData().then(rows => {
+    if (rows) {
+      sheetRowsById = indexRows(rows);
+      sheetAvailable = true;
+      showSyncBanner(null);
+    } else {
+      sheetAvailable = false;
+      showSyncBanner("⚠️ Couldn't reach the Google Sheet right now — showing what's saved on this device instead.", { retry: true });
+    }
+    buildAgenda();
+  });
 }
 
 function sheetRowToListing(r) {
@@ -278,6 +383,10 @@ function sheetRowToListing(r) {
     rating: r.Rating || "Somewhat interested",
     neighborhood: r.Neighborhood || "",
     rent: Number(r.Rent) || 0,
+    sqft: r.Sqft ? Number(r.Sqft) : null,
+    level: r.Level || "",
+    owner: r.Owner || "",
+    notes: r.Notes || "",
     link: r.Link || undefined,
     contactName: r.ContactName || "",
     phoneDisplay: r.PhoneDisplay || undefined,
@@ -287,11 +396,13 @@ function sheetRowToListing(r) {
 
 const storeKey = id => `apt-hunt-${id}`;
 
-function loadState(id, defaultRating) {
+function loadState(id, defaultRating, defaultPreNote) {
   if (sheetAvailable && sheetRowsById[id]) {
     const r = sheetRowsById[id];
     return {
-      date: r.Date || "",
+      date: normalizeDateStr(r.Date),
+      note: r.Note || "",
+      preNote: r.PreNote || defaultPreNote || "",
       decision: r.Decision || "",
       rating: r.Rating || defaultRating,
       deleted: r.Deleted === true || r.Deleted === "TRUE" || r.Deleted === "true",
@@ -299,9 +410,40 @@ function loadState(id, defaultRating) {
   }
   try {
     const stored = JSON.parse(localStorage.getItem(storeKey(id)));
-    return stored || { date: "", decision: "", rating: defaultRating };
+    return stored || { date: "", note: "", decision: "", rating: defaultRating, preNote: defaultPreNote || "" };
   } catch (e) {
-    return { date: "", decision: "", rating: defaultRating };
+    return { date: "", note: "", decision: "", rating: defaultRating, preNote: defaultPreNote || "" };
+  }
+}
+
+function postSheetRow(row) {
+  if (!sheetConfigured()) return;
+  // text/plain avoids a CORS preflight that Apps Script web apps don't handle.
+  fetch(SHEET_API_URL, {
+    method: "POST",
+    headers: { "Content-Type": "text/plain;charset=utf-8" },
+    body: JSON.stringify(row),
+  }).catch(() => { /* silent — local cache below still has the latest value */ });
+}
+
+function saveApptState(id, updates) {
+  const prev = loadState(id, updates.rating);
+  const next = Object.assign({}, prev, updates);
+  try {
+    localStorage.setItem(storeKey(id), JSON.stringify(next));
+  } catch (e) { /* best effort — sheet write below still goes through if configured */ }
+  if (sheetConfigured()) {
+    const row = Object.assign({}, sheetRowsById[id], {
+      ID: id,
+      Rating: next.rating,
+      Decision: next.decision,
+      Date: next.date,
+      Note: next.note,
+      PreNote: next.preNote,
+      Deleted: !!next.deleted,
+    });
+    sheetRowsById[id] = row;
+    postSheetRow(row);
   }
 }
 
@@ -353,27 +495,50 @@ function apptItemHtml(l, state) {
   const decisionTag = state.decision === "take" ? `<span class="decision-tag take">✅ Take it</span>`
     : state.decision === "unsure" ? `<span class="decision-tag unsure">🤔 Not sure</span>`
     : "";
+  const expanded = editingIds.has(l.id);
+  const detailBits = [
+    l.sqft ? `${l.sqft} ping` : "",
+    l.level || "",
+    l.owner || "",
+  ].filter(Boolean).join(" · ");
   return `
-    <div class="appt-item">
-      <div class="appt-item-main">
+    <div class="appt-item" data-id="${l.id}">
+      <div class="appt-item-main" data-toggle="${l.id}">
         <span class="rating-dot ${ratingClass[rating] || ""}">${escapeHtml(rating || "")}</span>
         <span class="appt-rent">NT$${(l.rent || 0).toLocaleString()}</span>
         ${l.neighborhood ? `<span class="appt-neighborhood">📍 ${escapeHtml(l.neighborhood)}</span>` : ""}
         ${decisionTag}
+        <span class="expand-caret">${expanded ? "▲" : "▼"}</span>
       </div>
-      <div class="appt-item-sub">
+      <div class="appt-item-sub" data-toggle="${l.id}">
         ${l.contactName || l.phoneDisplay ? `<span>${escapeHtml(l.contactName || "")}${l.contactName && l.phoneDisplay ? " · " : ""}${escapeHtml(l.phoneDisplay || "")}</span>` : ""}
         ${l.tel ? `<a class="call-btn" href="tel:${l.tel}">📞 Call</a>` : ""}
         <a href="${link}" target="_blank" rel="noopener">View listing →</a>
       </div>
+      ${expanded ? `
+        <div class="appt-detail-panel">
+          ${detailBits ? `<div class="appt-detail-line">${escapeHtml(detailBits)}</div>` : ""}
+          ${state.preNote ? `<div class="appt-detail-line appt-prenote">${escapeHtml(state.preNote)}</div>` : ""}
+          <label for="appt-date-${l.id}">Appointment date</label>
+          <input type="date" id="appt-date-${l.id}" value="${state.date}">
+          <label for="appt-note-${l.id}">Visit notes</label>
+          <textarea id="appt-note-${l.id}" rows="3" placeholder="How did the visit go?">${escapeHtml(state.note || "")}</textarea>
+          <div class="appt-detail-actions">
+            <button class="appt-save-btn" data-save="${l.id}">💾 Save</button>
+            <button class="appt-cancel-btn" data-cancel="${l.id}">Cancel</button>
+          </div>
+        </div>
+      ` : ""}
     </div>
   `;
 }
 
 async function buildAgenda() {
   const allListings = [...listings, ...loadCustomListings()];
+  listingsById = {};
+  allListings.forEach(l => { listingsById[l.id] = l; });
   const items = allListings
-    .map(l => ({ l, state: loadState(l.id, l.rating) }))
+    .map(l => ({ l, state: loadState(l.id, l.rating, l.notes) }))
     .filter(({ state }) => !state.deleted);
 
   const passedOn = items.filter(({ state }) => state.decision === "leave");
@@ -464,6 +629,37 @@ async function buildAgenda() {
   }
 
   agendaEl.innerHTML = html;
+
+  agendaEl.querySelectorAll("[data-toggle]").forEach(el => {
+    el.addEventListener("click", (e) => {
+      if (e.target.closest("a")) return; // let Call / View listing links work normally
+      const id = el.dataset.toggle;
+      if (editingIds.has(id)) editingIds.delete(id); else editingIds.add(id);
+      buildAgenda();
+    });
+  });
+
+  agendaEl.querySelectorAll("[data-save]").forEach(btn => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const id = btn.dataset.save;
+      const l = listingsById[id];
+      const dateInput = document.getElementById(`appt-date-${id}`);
+      const noteInput = document.getElementById(`appt-note-${id}`);
+      const prev = loadState(id, l ? l.rating : undefined, l ? l.notes : undefined);
+      saveApptState(id, { date: dateInput.value, note: noteInput.value, rating: prev.rating, decision: prev.decision, preNote: prev.preNote, deleted: prev.deleted });
+      editingIds.delete(id);
+      buildAgenda();
+    });
+  });
+
+  agendaEl.querySelectorAll("[data-cancel]").forEach(btn => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      editingIds.delete(btn.dataset.cancel);
+      buildAgenda();
+    });
+  });
 }
 
 function init() {
@@ -475,17 +671,7 @@ function init() {
   buildAgenda();
 
   if (sheetConfigured()) {
-    fetchSheetData().then(rows => {
-      if (rows) {
-        sheetRowsById = indexRows(rows);
-        sheetAvailable = true;
-        showSyncBanner(null);
-      } else {
-        sheetAvailable = false;
-        showSyncBanner("⚠️ Couldn't reach the Google Sheet right now — showing what's saved on this device instead.");
-      }
-      buildAgenda();
-    });
+    syncFromSheet();
   }
 }
 
