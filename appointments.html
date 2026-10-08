@@ -1,0 +1,508 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>📅 Appointments — Apartment Hunt</title>
+<style>
+  :root {
+    --top-pick: #e03e3e;
+    --very: #dfab01;
+    --somewhat: #337ea9;
+    --bg: #faf9f7;
+    --card: #ffffff;
+    --text: #2f2f2f;
+    --muted: #767676;
+    --border: #e6e4e0;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    padding-bottom: 60px;
+  }
+  header {
+    padding: 28px 20px 14px;
+    text-align: center;
+  }
+  header h1 {
+    margin: 0 0 6px;
+    font-size: 1.5rem;
+  }
+  header p {
+    margin: 0 0 10px;
+    color: var(--muted);
+    font-size: 0.9rem;
+  }
+  .nav-link {
+    display: inline-block;
+    font-size: 0.82rem;
+    color: #1c6fd1;
+    text-decoration: none;
+  }
+  .sync-banner {
+    max-width: 640px;
+    margin: 0 auto 16px;
+    padding: 10px 16px;
+    background: #fff3cd;
+    border: 1px solid #d4a017;
+    color: #8a6400;
+    font-size: 0.82rem;
+    border-radius: 10px;
+    text-align: center;
+  }
+  .stats-row {
+    max-width: 640px;
+    margin: 0 auto 20px;
+    padding: 0 16px;
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  .stat-pill {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 8px 16px;
+    font-size: 0.82rem;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .stat-pill b { font-size: 0.95rem; }
+  .agenda {
+    max-width: 640px;
+    margin: 0 auto;
+    padding: 0 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 22px;
+  }
+  .section-title {
+    font-size: 1rem;
+    font-weight: 700;
+    margin: 0 0 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .date-group {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 14px 16px;
+    margin-bottom: 12px;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.03);
+  }
+  .date-group.today {
+    border-color: #dfab01;
+    background: #fffdf5;
+  }
+  .date-heading {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin: 0 0 10px;
+    font-size: 0.95rem;
+    font-weight: 700;
+  }
+  .date-heading .rel {
+    font-weight: 500;
+    color: var(--muted);
+    font-size: 0.8rem;
+  }
+  .count-badge {
+    background: var(--text);
+    color: #fff;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 20px;
+    white-space: nowrap;
+  }
+  .date-group.today .count-badge {
+    background: #dfab01;
+    color: #3a2e00;
+  }
+  .appt-item {
+    padding: 10px 0;
+    border-top: 1px solid var(--border);
+  }
+  .appt-item:first-child { border-top: none; padding-top: 0; }
+  .appt-item-main {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 6px;
+  }
+  .rating-dot {
+    display: inline-block;
+    font-size: 0.7rem;
+    font-weight: 600;
+    padding: 2px 9px;
+    border-radius: 20px;
+    color: #fff;
+    white-space: nowrap;
+  }
+  .rating-dot.top { background: var(--top-pick); }
+  .rating-dot.very { background: var(--very); color: #3a2e00; }
+  .rating-dot.somewhat { background: var(--somewhat); }
+  .appt-rent { font-weight: 700; }
+  .appt-neighborhood { color: var(--muted); font-size: 0.85rem; }
+  .decision-tag {
+    font-size: 0.7rem;
+    font-weight: 600;
+    padding: 2px 9px;
+    border-radius: 20px;
+  }
+  .decision-tag.take { background: #ddf3e4; color: #1d6b2d; }
+  .decision-tag.unsure { background: #fff3cd; color: #8a6400; }
+  .appt-item-sub {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+    font-size: 0.82rem;
+    color: var(--muted);
+  }
+  .appt-item-sub a {
+    color: #1c6fd1;
+    text-decoration: none;
+    font-weight: 600;
+  }
+  .appt-item-sub .call-btn {
+    background: #eef5ff;
+    color: #1b5fb0;
+    padding: 2px 10px;
+    border-radius: 20px;
+    font-weight: 600;
+  }
+  .empty-state {
+    text-align: center;
+    color: var(--muted);
+    font-size: 0.88rem;
+    padding: 20px 16px;
+    background: var(--card);
+    border: 1px dashed var(--border);
+    border-radius: 14px;
+  }
+  details.past-section summary {
+    cursor: pointer;
+    font-weight: 700;
+    font-size: 0.95rem;
+    padding: 4px 0;
+    color: var(--muted);
+  }
+  details.past-section[open] summary { color: var(--text); margin-bottom: 8px; }
+  footer {
+    text-align: center;
+    color: var(--muted);
+    font-size: 0.75rem;
+    margin-top: 30px;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>📅 Appointment Schedule</h1>
+  <p>Who you're visiting, and when — grouped by date so you can see what's left to plan.</p>
+  <a class="nav-link" href="index.html">← Back to full list</a>
+</header>
+
+<div class="sync-banner" id="sync-banner" style="display:none;"></div>
+
+<div class="stats-row" id="stats-row"></div>
+
+<div class="agenda" id="agenda"></div>
+
+<footer>Made with 💛 for apartment hunting </footer>
+
+<script>
+const listings = [
+  { id: "22109937", rating: "Top pick", neighborhood: "Xindian", rent: 12000, sqft: 5, level: "3F/4F", owner: "Owner", fee: "No-Fee", elevator: false, features: ["washing machine","Water Machine","rent-stabilized"], notes: "", contactName: "曾小姐", phoneDisplay: "0972-528-577 ext 4726653", tel: "0972528577,4726653" },
+  { id: "22100813", rating: "Very interested", neighborhood: "Xindian", rent: 12500, sqft: 10, level: "2F/3F", owner: "Owner", fee: "Water Free", elevator: false, features: ["washing machine (share)"], notes: "", contactName: "龔女士", phoneDisplay: "0935-920-910", tel: "0935920910" },
+  { id: "22097513", rating: "Very interested", neighborhood: "Xindian", rent: 13500, sqft: 8, level: "", owner: "Agent", fee: "", elevator: false, features: ["washing machine","Water Machine"], notes: "", contactName: "崔小姐", phoneDisplay: "0918-666-444", tel: "0918666444", lineId: "0918666444", lineType: "personal" },
+  { id: "22135508", rating: "Very interested", neighborhood: "Xindian", rent: 10000, sqft: 5, level: "1F", owner: "Owner", fee: "", elevator: false, features: ["washing machine"], notes: "", contactName: "黃先生", phoneDisplay: "0972-528-577 ext 4725739", tel: "0972528577,4725739" },
+  { id: "22100737", rating: "Very interested", neighborhood: "Xindian", rent: 11000, sqft: 8, level: "2F", owner: "Owner", fee: "", elevator: false, features: ["washing machine"], notes: "", contactName: "0先生", phoneDisplay: "0972-528-577 ext 4725751", tel: "0972528577,4725751" },
+  { id: "22056915", rating: "Somewhat interested", neighborhood: "Xindian", rent: 8500, sqft: 9, level: "1F", owner: "Owner", fee: "No-Fee", elevator: false, features: [], notes: "", contactName: "呂先生", phoneDisplay: "0988-215-941", tel: "0988215941" },
+  { id: "22038129", rating: "Somewhat interested", neighborhood: "Xindian", rent: 8000, sqft: 8, level: "頂層加蓋/1F", owner: "Owner", fee: "No-Fee", elevator: false, features: ["washing machine","rent-stabilized"], notes: "", contactName: "蔡先生", phoneDisplay: "0972-528-577 ext 4718484", tel: "0972528577,4718484" },
+  { id: "22101540", rating: "Somewhat interested", neighborhood: "Xindian", rent: 11300, sqft: 6, level: "4F", owner: "Agent", fee: "?", elevator: false, features: ["washing machine"], notes: "", contactName: "張先生", phoneDisplay: "0939-100-187", tel: "0939100187", lineId: "quv4409a", lineType: "official" },
+  { id: "22064039", rating: "Somewhat interested", neighborhood: "Xindian", rent: 16800, sqft: null, level: "3F", owner: "Owner", fee: "", elevator: false, features: [], notes: "Shared Bathroom", contactName: "張先生", phoneDisplay: "0920-022-682", tel: "0920022682" },
+  { id: "22103904", rating: "Somewhat interested", neighborhood: "Xindian", rent: 8500, sqft: 7, level: "5F", owner: "Owner", fee: "?", elevator: false, features: [], notes: "", contactName: "李小姐", phoneDisplay: "0972-281-522", tel: "0972281522" },
+  { id: "22138815", rating: "Somewhat interested", neighborhood: "Xindian", rent: 15000, sqft: 10, level: "6F", owner: "Agent", fee: "Fee", elevator: true, features: [], notes: "Need to pay Agent fee / service fee: half a month's rent", contactName: "游先生 (Eason)", phoneDisplay: "0970-104-204", tel: "0970104204", lineId: "d10220112", lineType: "personal" },
+];
+
+const ratingClass = { "Top pick": "top", "Very interested": "very", "Somewhat interested": "somewhat" };
+const ratingRank = { "Top pick": 0, "Very interested": 1, "Somewhat interested": 2 };
+
+// ---- Google Sheets sync (read-only on this page — editing still happens on index.html) ----
+const SHEET_API_URL = "https://script.google.com/macros/s/AKfycbyttJJmN_A4xor30xAG-Iis_FHJn6tg8OahFBKyR5xaAFDfbHr9z3OXMsD1wkWhrpw/exec";
+const sheetConfigured = () => !!SHEET_API_URL;
+
+let sheetRowsById = {};
+let sheetAvailable = false;
+
+function indexRows(rows) {
+  const map = {};
+  rows.forEach(r => { if (r.ID !== undefined && r.ID !== "") map[String(r.ID)] = r; });
+  return map;
+}
+
+async function fetchSheetData() {
+  try {
+    const res = await fetch(SHEET_API_URL, { cache: "no-store" });
+    if (!res.ok) throw new Error("bad response");
+    const rows = await res.json();
+    return Array.isArray(rows) ? rows : [];
+  } catch (e) {
+    return null;
+  }
+}
+
+function showSyncBanner(text) {
+  const banner = document.getElementById("sync-banner");
+  if (!text) { banner.style.display = "none"; return; }
+  banner.textContent = text;
+  banner.style.display = "block";
+}
+
+function sheetRowToListing(r) {
+  return {
+    id: String(r.ID),
+    custom: true,
+    rating: r.Rating || "Somewhat interested",
+    neighborhood: r.Neighborhood || "",
+    rent: Number(r.Rent) || 0,
+    link: r.Link || undefined,
+    contactName: r.ContactName || "",
+    phoneDisplay: r.PhoneDisplay || undefined,
+    tel: r.PhoneDisplay ? String(r.PhoneDisplay).replace(/[^\d,]/g, "") : undefined,
+  };
+}
+
+const storeKey = id => `apt-hunt-${id}`;
+
+function loadState(id, defaultRating) {
+  if (sheetAvailable && sheetRowsById[id]) {
+    const r = sheetRowsById[id];
+    return {
+      date: r.Date || "",
+      decision: r.Decision || "",
+      rating: r.Rating || defaultRating,
+      deleted: r.Deleted === true || r.Deleted === "TRUE" || r.Deleted === "true",
+    };
+  }
+  try {
+    const stored = JSON.parse(localStorage.getItem(storeKey(id)));
+    return stored || { date: "", decision: "", rating: defaultRating };
+  } catch (e) {
+    return { date: "", decision: "", rating: defaultRating };
+  }
+}
+
+const CUSTOM_KEY = "apt-hunt-custom-list";
+
+function loadCustomListings() {
+  if (sheetAvailable) {
+    return Object.values(sheetRowsById)
+      .filter(r => (r.Custom === true || r.Custom === "TRUE") && !listings.some(l => l.id === String(r.ID)))
+      .map(sheetRowToListing);
+  }
+  try {
+    const stored = JSON.parse(localStorage.getItem(CUSTOM_KEY));
+    return Array.isArray(stored) ? stored : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+function escapeHtml(str) {
+  return String(str).replace(/[&<>"']/g, c => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+  }[c]));
+}
+
+function todayStr() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function formatDateHeading(dateStr) {
+  const d = new Date(dateStr + "T00:00:00");
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const diffDays = Math.round((d - today) / 86400000);
+  const weekday = d.toLocaleDateString("en-US", { weekday: "long" });
+  const monthDay = d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  let rel;
+  if (diffDays === 0) rel = "Today";
+  else if (diffDays === 1) rel = "Tomorrow";
+  else if (diffDays === -1) rel = "Yesterday";
+  else if (diffDays < 0) rel = `${-diffDays} days ago`;
+  else rel = `in ${diffDays} days`;
+  return { label: `${weekday}, ${monthDay}`, rel, diffDays };
+}
+
+function apptItemHtml(l, state) {
+  const link = l.link || `https://rent.591.com.tw/${l.id}`;
+  const rating = state.rating || l.rating;
+  const decisionTag = state.decision === "take" ? `<span class="decision-tag take">✅ Take it</span>`
+    : state.decision === "unsure" ? `<span class="decision-tag unsure">🤔 Not sure</span>`
+    : "";
+  return `
+    <div class="appt-item">
+      <div class="appt-item-main">
+        <span class="rating-dot ${ratingClass[rating] || ""}">${escapeHtml(rating || "")}</span>
+        <span class="appt-rent">NT$${(l.rent || 0).toLocaleString()}</span>
+        ${l.neighborhood ? `<span class="appt-neighborhood">📍 ${escapeHtml(l.neighborhood)}</span>` : ""}
+        ${decisionTag}
+      </div>
+      <div class="appt-item-sub">
+        ${l.contactName || l.phoneDisplay ? `<span>${escapeHtml(l.contactName || "")}${l.contactName && l.phoneDisplay ? " · " : ""}${escapeHtml(l.phoneDisplay || "")}</span>` : ""}
+        ${l.tel ? `<a class="call-btn" href="tel:${l.tel}">📞 Call</a>` : ""}
+        <a href="${link}" target="_blank" rel="noopener">View listing →</a>
+      </div>
+    </div>
+  `;
+}
+
+async function buildAgenda() {
+  const allListings = [...listings, ...loadCustomListings()];
+  const items = allListings
+    .map(l => ({ l, state: loadState(l.id, l.rating) }))
+    .filter(({ state }) => !state.deleted);
+
+  const passedOn = items.filter(({ state }) => state.decision === "leave");
+  const active = items.filter(({ state }) => state.decision !== "leave");
+  const scheduled = active.filter(({ state }) => state.date);
+  const needsSchedule = active.filter(({ state }) => !state.date);
+
+  const today = todayStr();
+  const byDate = {};
+  scheduled.forEach(item => {
+    (byDate[item.state.date] = byDate[item.state.date] || []).push(item);
+  });
+  const sortedDates = Object.keys(byDate).sort();
+  const upcomingDates = sortedDates.filter(d => d >= today);
+  const pastDates = sortedDates.filter(d => d < today);
+
+  const sortByRating = (a, b) => (ratingRank[a.state.rating || a.l.rating] ?? 9) - (ratingRank[b.state.rating || b.l.rating] ?? 9);
+
+  // ---- stats ----
+  const statsEl = document.getElementById("stats-row");
+  statsEl.innerHTML = `
+    <div class="stat-pill">🗓️ <b>${scheduled.length}</b> appointment${scheduled.length === 1 ? "" : "s"} scheduled</div>
+    <div class="stat-pill">❓ <b>${needsSchedule.length}</b> still need a date</div>
+    <div class="stat-pill">🙅 <b>${passedOn.length}</b> passed on</div>
+  `;
+
+  // ---- agenda sections ----
+  const agendaEl = document.getElementById("agenda");
+  let html = "";
+
+  html += `<div><h2 class="section-title">📍 Upcoming appointments</h2>`;
+  if (upcomingDates.length === 0) {
+    html += `<div class="empty-state">No appointments scheduled yet. Pick a place below and set a date for it on the main list.</div>`;
+  } else {
+    upcomingDates.forEach(date => {
+      const { label, rel, diffDays } = formatDateHeading(date);
+      const dayItems = byDate[date].slice().sort(sortByRating);
+      html += `
+        <div class="date-group ${diffDays === 0 ? "today" : ""}">
+          <div class="date-heading">
+            <span>${label} <span class="rel">· ${rel}</span></span>
+            <span class="count-badge">${dayItems.length} place${dayItems.length === 1 ? "" : "s"}</span>
+          </div>
+          ${dayItems.map(({ l, state }) => apptItemHtml(l, state)).join("")}
+        </div>
+      `;
+    });
+  }
+  html += `</div>`;
+
+  html += `<div><h2 class="section-title">⏳ Still need to schedule</h2>`;
+  if (needsSchedule.length === 0) {
+    html += `<div class="empty-state">Everything you're still considering already has a date. 🎉</div>`;
+  } else {
+    const sortedNeeds = needsSchedule.slice().sort(sortByRating);
+    html += `<div class="date-group">${sortedNeeds.map(({ l, state }) => apptItemHtml(l, state)).join("")}</div>`;
+  }
+  html += `</div>`;
+
+  if (pastDates.length > 0) {
+    html += `
+      <details class="past-section">
+        <summary>✅ Past appointments (${pastDates.reduce((n, d) => n + byDate[d].length, 0)})</summary>
+        ${pastDates.map(date => {
+          const { label, rel } = formatDateHeading(date);
+          const dayItems = byDate[date].slice().sort(sortByRating);
+          return `
+            <div class="date-group">
+              <div class="date-heading">
+                <span>${label} <span class="rel">· ${rel}</span></span>
+                <span class="count-badge">${dayItems.length} place${dayItems.length === 1 ? "" : "s"}</span>
+              </div>
+              ${dayItems.map(({ l, state }) => apptItemHtml(l, state)).join("")}
+            </div>
+          `;
+        }).join("")}
+      </details>
+    `;
+  }
+
+  if (passedOn.length > 0) {
+    html += `
+      <details class="past-section">
+        <summary>🙅 Passed on (${passedOn.length})</summary>
+        <div class="date-group">${passedOn.map(({ l, state }) => apptItemHtml(l, state)).join("")}</div>
+      </details>
+    `;
+  }
+
+  agendaEl.innerHTML = html;
+}
+
+function init() {
+  if (sheetConfigured()) {
+    showSyncBanner("⏳ Loading latest data from Google Sheets…");
+  } else {
+    showSyncBanner("⚠️ Not connected to Google Sheets yet — showing what's saved on this device only.");
+  }
+  buildAgenda();
+
+  if (sheetConfigured()) {
+    fetchSheetData().then(rows => {
+      if (rows) {
+        sheetRowsById = indexRows(rows);
+        sheetAvailable = true;
+        showSyncBanner(null);
+      } else {
+        sheetAvailable = false;
+        showSyncBanner("⚠️ Couldn't reach the Google Sheet right now — showing what's saved on this device instead.");
+      }
+      buildAgenda();
+    });
+  }
+}
+
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible" && sheetConfigured()) {
+    fetchSheetData().then(rows => {
+      if (rows) {
+        sheetRowsById = indexRows(rows);
+        sheetAvailable = true;
+        showSyncBanner(null);
+        buildAgenda();
+      }
+    });
+  }
+});
+
+init();
+</script>
+</body>
+</html>
