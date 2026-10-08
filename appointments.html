@@ -293,6 +293,7 @@ const listings = [
 const ratingClass = { "Top pick": "top", "Very interested": "very", "Somewhat interested": "somewhat" };
 const ratingRank = { "Top pick": 0, "Very interested": 1, "Somewhat interested": 2 };
 const editingIds = new Set(); // ids currently showing their expanded detail/notes panel
+const openSections = new Set(); // collapsible sections ("past", "passed") the user has opened — kept open across re-renders
 let listingsById = {}; // refreshed each buildAgenda() — lets click handlers look up a listing by id
 
 // ---- Google Sheets sync (read-only on this page — editing still happens on index.html) ----
@@ -365,12 +366,34 @@ document.getElementById("sync-banner").addEventListener("click", (e) => {
   if (e.target && e.target.id === "retry-sync-btn") syncFromSheet();
 });
 
+// Google Apps Script often takes 5–40s to answer, so keep a copy of the
+// last good response on this device and show it straight away while the
+// fresh data loads in the background.
+const SHEET_CACHE_KEY = "apt-hunt-sheet-cache";
+
+function loadSheetCache() {
+  try { return JSON.parse(localStorage.getItem(SHEET_CACHE_KEY)); } catch (e) { return null; }
+}
+
+function saveSheetCache() {
+  try { localStorage.setItem(SHEET_CACHE_KEY, JSON.stringify(Object.values(sheetRowsById))); } catch (e) { /* best effort */ }
+}
+
 function syncFromSheet() {
-  showSyncBanner("⏳ Loading latest data from Google Sheets…");
+  const cached = loadSheetCache();
+  if (Array.isArray(cached) && cached.length) {
+    sheetRowsById = indexRows(cached);
+    sheetAvailable = true;
+    buildAgenda();
+    showSyncBanner("🔄 Showing saved data — checking Google Sheets for updates…");
+  } else {
+    showSyncBanner("⏳ Loading latest data from Google Sheets…");
+  }
   return fetchSheetData().then(rows => {
     if (rows) {
       sheetRowsById = indexRows(rows);
       sheetAvailable = true;
+      saveSheetCache();
       showSyncBanner(null);
     } else {
       sheetAvailable = false;
@@ -422,6 +445,7 @@ function loadState(id, defaultRating, defaultPreNote) {
 
 function postSheetRow(row) {
   if (!sheetConfigured()) return;
+  saveSheetCache();
   // text/plain avoids a CORS preflight that Apps Script web apps don't handle.
   fetch(SHEET_API_URL, {
     method: "POST",
@@ -604,7 +628,7 @@ async function buildAgenda() {
 
   if (pastDates.length > 0) {
     html += `
-      <details class="past-section">
+      <details class="past-section" data-section="past"${openSections.has("past") ? " open" : ""}>
         <summary>✅ Past appointments (${pastDates.reduce((n, d) => n + byDate[d].length, 0)})</summary>
         ${pastDates.map(date => {
           const { label, rel } = formatDateHeading(date);
@@ -625,7 +649,7 @@ async function buildAgenda() {
 
   if (passedOn.length > 0) {
     html += `
-      <details class="past-section">
+      <details class="past-section" data-section="passed"${openSections.has("passed") ? " open" : ""}>
         <summary>🙅 Passed on (${passedOn.length})</summary>
         <div class="date-group">${passedOn.map(({ l, state }) => apptItemHtml(l, state)).join("")}</div>
       </details>
@@ -633,6 +657,12 @@ async function buildAgenda() {
   }
 
   agendaEl.innerHTML = html;
+
+  agendaEl.querySelectorAll("details[data-section]").forEach(el => {
+    el.addEventListener("toggle", () => {
+      if (el.open) openSections.add(el.dataset.section); else openSections.delete(el.dataset.section);
+    });
+  });
 
   agendaEl.querySelectorAll("[data-toggle]").forEach(el => {
     el.addEventListener("click", (e) => {
